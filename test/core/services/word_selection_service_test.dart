@@ -123,23 +123,34 @@ void main() {
     expect(session, hasLength(10), reason: 'missing new words should be backfilled, not leave gaps');
   });
 
-  test('returns fewer than requested rather than duplicating when the whole pool is small', () {
-    final pool = [
-      _overdueWord('only_overdue', overdueAt),
-      _weakWord('only_weak'),
-    ];
+  test(
+    'fills the rest by repeating candidates (maintenance cycling) rather than returning short '
+    'when the whole pool is smaller than requested -- studying must never run out of words',
+    () {
+      final pool = [
+        _overdueWord('only_overdue', overdueAt),
+        _weakWord('only_weak'),
+      ];
 
-    final session = service.buildSession(
-      pool: pool,
-      kind: SessionKind.study,
-      userLevel: 5,
-      now: now,
-      count: 10,
-    );
+      final session = service.buildSession(
+        pool: pool,
+        kind: SessionKind.study,
+        userLevel: 5,
+        now: now,
+        count: 10,
+      );
 
-    expect(session, hasLength(2));
-    expect(session.map((c) => c.wordId).toSet(), hasLength(2));
-  });
+      expect(session, hasLength(10));
+      expect(session.map((c) => c.wordId).toSet(), {'only_overdue', 'only_weak'});
+      for (var i = 1; i < session.length; i++) {
+        expect(
+          session[i].wordId,
+          isNot(session[i - 1].wordId),
+          reason: 'the same word must never appear twice in a row',
+        );
+      }
+    },
+  );
 
   test('never selects the same word twice in one session', () {
     final pool = [
@@ -160,19 +171,107 @@ void main() {
     expect(session.map((c) => c.wordId).toSet(), hasLength(session.length));
   });
 
-  test('a word not yet due and never introduced-wrong is excluded entirely', () {
-    final pool = [_notYetDueWord('sleeping')];
+  test(
+    'a word not yet due and never introduced-wrong is excluded from the initial pass, but still '
+    'resurfaces through maintenance repetition once nothing else is eligible -- "not due yet" is '
+    'a review-priority signal, not a permanent ban',
+    () {
+      final pool = [_notYetDueWord('sleeping')];
+
+      final session = service.buildSession(
+        pool: pool,
+        kind: SessionKind.study,
+        userLevel: 5,
+        now: now,
+        count: 10,
+      );
+
+      expect(session, hasLength(10));
+      expect(session.every((c) => c.wordId == 'sleeping'), isTrue);
+    },
+  );
+
+  test('the empty pool is the only case that legitimately returns no words', () {
+    final session = service.buildSession(
+      pool: const [],
+      kind: SessionKind.study,
+      userLevel: 5,
+      now: now,
+      count: 50,
+    );
+
+    expect(session, isEmpty);
+  });
+
+  test(
+    'a 10-word bank can supply 100 exercises with repetition and never returns short',
+    () {
+      final pool = _many(10, (id) => _overdueWord(id, overdueAt));
+
+      final session = service.buildSession(
+        pool: pool,
+        kind: SessionKind.study,
+        userLevel: 5,
+        now: now,
+        count: 100,
+      );
+
+      expect(session, hasLength(100));
+      expect(session.map((c) => c.wordId).toSet(), hasLength(10));
+    },
+  );
+
+  test('a 120-word bank can supply 1000 exercises', () {
+    final pool = _many(120, (id) => _overdueWord(id, overdueAt));
 
     final session = service.buildSession(
       pool: pool,
       kind: SessionKind.study,
       userLevel: 5,
       now: now,
-      count: 10,
+      count: 1000,
     );
 
-    expect(session, isEmpty);
+    expect(session, hasLength(1000));
   });
+
+  test('a 3000-word bank can supply 5000 exercises', () {
+    final pool = _many(3000, (id) => _overdueWord(id, overdueAt));
+
+    final session = service.buildSession(
+      pool: pool,
+      kind: SessionKind.study,
+      userLevel: 5,
+      now: now,
+      count: 5000,
+    );
+
+    expect(session, hasLength(5000));
+  });
+
+  test(
+    'recentlyShownWordIds seeds the no-repeat window across batch boundaries, so continuing a '
+    'session in a new buildSession call never repeats the very last word shown',
+    () {
+      // Both candidates are excluded from the initial bucketed pass (not
+      // due yet), so the whole selection comes from maintenance
+      // repetition -- isolating recentlyShownWordIds' effect from the
+      // primary pass' own (unrelated) ordering.
+      final pool = [_notYetDueWord('a'), _notYetDueWord('b')];
+
+      final session = service.buildSession(
+        pool: pool,
+        kind: SessionKind.study,
+        userLevel: 5,
+        now: now,
+        count: 5,
+        recentlyShownWordIds: const ['b'],
+      );
+
+      expect(session, hasLength(5));
+      expect(session.first.wordId, 'a');
+    },
+  );
 
   test('a new word above the recommended-level buffer is not offered yet', () {
     final pool = [

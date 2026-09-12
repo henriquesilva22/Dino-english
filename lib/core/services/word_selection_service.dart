@@ -1,3 +1,5 @@
+import 'dart:collection' show Queue;
+
 import '../models/session_kind.dart';
 import '../models/word_candidate.dart';
 
@@ -54,6 +56,14 @@ enum _Bucket { newWord, overdue, weak, maintenance }
 /// target mix is filled per bucket and then backfilled, in priority
 /// order overdue > weak > new > maintenance, if a bucket runs short --
 /// which matters a lot for the MVP's ~120-word bank.
+///
+/// [count] is always honored as long as [pool] isn't empty: once every
+/// candidate that's actually due/new/weak has been used once, this does
+/// NOT return short. It keeps filling by cycling the whole pool as
+/// maintenance repetition (weakest mastery first), so a study session can
+/// request an arbitrarily large batch -- or be called over and over, batch
+/// after batch -- and never run out of words as long as the bank itself
+/// has content. See [_fillByRepetition].
 class WordSelectionService {
   const WordSelectionService();
 
@@ -65,6 +75,14 @@ class WordSelectionService {
     int count = 10,
     String? recentCategory,
     int newWordLevelBuffer = 3,
+
+    /// Word ids shown immediately before this call (e.g. the tail of the
+    /// previous batch in an ongoing session) -- seeds the no-immediate-
+    /// repeat window in [_fillByRepetition] so a batch boundary doesn't
+    /// show the same word twice in a row. Purely advisory: an empty list
+    /// (the default, and every existing call site) just means the window
+    /// starts out seeded from this call's own selection instead.
+    List<String> recentlyShownWordIds = const [],
   }) {
     final buckets = <_Bucket, List<WordCandidate>>{
       _Bucket.newWord: [],
@@ -127,7 +145,86 @@ class WordSelectionService {
       }
     }
 
+    if (selected.length < count && pool.isNotEmpty) {
+      _fillByRepetition(
+        selected: selected,
+        pool: pool,
+        count: count,
+        userLevel: userLevel,
+        newWordLevelBuffer: newWordLevelBuffer,
+        recentlyShownWordIds: recentlyShownWordIds,
+      );
+    }
+
     return selected;
+  }
+
+  /// The pool isn't "out of words" just because nothing is due/new/weak
+  /// right now -- it's time for maintenance review. Cycles the pool,
+  /// weakest mastery (then most-overdue) first, repeating as many times as
+  /// needed to reach [count]. A small trailing window (seeded from
+  /// [recentlyShownWordIds] plus whatever [selected] already holds) is
+  /// skipped where possible so the same word never appears back-to-back --
+  /// except when the pool is too small to avoid it at all, in which case
+  /// repetition is unavoidable and expected (a 1-word pool repeats that
+  /// word every time).
+  ///
+  /// Never-introduced words still above [userLevel] + [newWordLevelBuffer]
+  /// are excluded here too -- repetition is for reviewing what's already
+  /// been seen (or is otherwise due), not a backdoor for surfacing content
+  /// the learner hasn't been paced into yet. That filter is dropped only
+  /// if it would leave nothing at all to repeat, since never running out
+  /// of words outranks pacing in that one corner case.
+  void _fillByRepetition({
+    required List<WordCandidate> selected,
+    required List<WordCandidate> pool,
+    required int count,
+    required int userLevel,
+    required int newWordLevelBuffer,
+    required List<String> recentlyShownWordIds,
+  }) {
+    final eligiblePool = pool
+        .where(
+          (c) =>
+              c.hasBeenIntroduced ||
+              c.recommendedLevel <= userLevel + newWordLevelBuffer,
+        )
+        .toList();
+    final ranked = [...(eligiblePool.isNotEmpty ? eligiblePool : pool)]
+      ..sort((a, b) {
+      final byMastery = a.masteryLevel.compareTo(b.masteryLevel);
+      if (byMastery != 0) return byMastery;
+      final aDue = a.nextReviewAt ?? DateTime(9999);
+      final bDue = b.nextReviewAt ?? DateTime(9999);
+      return aDue.compareTo(bDue);
+    });
+
+    final windowSize = (ranked.length - 1).clamp(0, 5);
+    final recentIds = [
+      ...recentlyShownWordIds,
+      ...selected.map((c) => c.wordId),
+    ];
+    final recentWindow = Queue<String>.of(
+      recentIds.length > windowSize
+          ? recentIds.sublist(recentIds.length - windowSize)
+          : recentIds,
+    );
+
+    var cursor = 0;
+    var skippedInARow = 0;
+    while (selected.length < count) {
+      final candidate = ranked[cursor % ranked.length];
+      cursor++;
+      if (recentWindow.contains(candidate.wordId) &&
+          skippedInARow < ranked.length) {
+        skippedInARow++;
+        continue;
+      }
+      skippedInARow = 0;
+      selected.add(candidate);
+      recentWindow.addLast(candidate.wordId);
+      if (recentWindow.length > windowSize) recentWindow.removeFirst();
+    }
   }
 
   _Bucket? _bucketFor(
