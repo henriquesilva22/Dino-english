@@ -35,6 +35,18 @@ class AnswerResult {
   bool get leveledUp => newLevel > previousLevel;
 }
 
+/// One recorded attempt from a study block, joined back to its word for
+/// display -- used by Estudar's end-of-block results screen (acertos/erros
+/// with translations). Reuses `exercise_attempts`/`sessionId`, already
+/// written by every [ProgressRepository.recordAnswer] call, rather than a
+/// new table.
+class StudyBlockAttempt {
+  const StudyBlockAttempt({required this.word, required this.wasCorrect});
+
+  final Word word;
+  final bool wasCorrect;
+}
+
 class WordMasteryStats {
   const WordMasteryStats({
     required this.totalActiveWords,
@@ -275,6 +287,32 @@ class ProgressRepository {
       (_database.select(
         _database.userProfile,
       )..where((t) => t.id.equals(1))).getSingle();
+
+  /// All attempts recorded under [sessionId], oldest first, joined back to
+  /// their word. One Estudar block = one `sessionId` (see
+  /// `StudySessionController`), so this naturally isolates one block's
+  /// results from any other session's -- no new table needed.
+  Future<List<StudyBlockAttempt>> fetchAttemptsForSession(
+    String sessionId,
+  ) async {
+    final query = _database.select(_database.exerciseAttempts).join([
+      innerJoin(
+        _database.words,
+        _database.words.id.equalsExp(_database.exerciseAttempts.wordId),
+      ),
+    ])
+      ..where(_database.exerciseAttempts.sessionId.equals(sessionId))
+      ..orderBy([OrderingTerm.asc(_database.exerciseAttempts.attemptedAt)]);
+    final rows = await query.get();
+    return rows
+        .map(
+          (row) => StudyBlockAttempt(
+            word: row.readTable(_database.words),
+            wasCorrect: row.readTable(_database.exerciseAttempts).wasCorrect,
+          ),
+        )
+        .toList();
+  }
 
   Future<WordMasteryStats> fetchMasteryStats() async {
     final query = _database.select(_database.words).join([

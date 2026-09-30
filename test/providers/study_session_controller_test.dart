@@ -292,8 +292,8 @@ void main() {
   );
 
   test(
-    'nextQuestion extends the session with another batch instead of ending it once the first '
-    'batch is exhausted -- Estudar must never dead-end into "Sessão concluída"',
+    'a block never exceeds kWordsPerBlock words and completes once they are all answered -- '
+    'Estudar must not dead-end into an infinite session',
     () async {
       for (final id in ['word.x', 'word.y', 'word.z']) {
         await database.into(database.words).insert(_word(id, recommendedLevel: 1));
@@ -311,12 +311,10 @@ void main() {
       // WordSelectionService already fills a full batch via maintenance
       // repetition even though the DB only has 3 distinct words -- see
       // word_selection_service_test.dart for that guarantee in isolation.
-      // This test is about what happens once THIS batch, not the word
-      // bank, runs out.
-      expect(loaded.items, hasLength(10));
+      expect(loaded.items, hasLength(StudySessionController.kWordsPerBlock));
 
       final notifier = container.read(studySessionProvider.notifier);
-      for (var i = 0; i < 10; i++) {
+      for (var i = 0; i < StudySessionController.kWordsPerBlock; i++) {
         final current = container.read(studySessionProvider);
         expect(current.isComplete, isFalse);
         notifier.selectOption(current.currentQuestion.word.id);
@@ -325,59 +323,157 @@ void main() {
       }
 
       final state = container.read(studySessionProvider);
-      expect(state.currentIndex, 10);
-      expect(state.items.length, greaterThan(10));
-      expect(state.isComplete, isFalse);
-      expect(state.currentQuestion.word.id, isNotEmpty);
+      expect(state.currentIndex, StudySessionController.kWordsPerBlock);
+      expect(
+        state.items.length,
+        StudySessionController.kWordsPerBlock,
+        reason: 'the block never grows past its fixed size -- no 11th word is ever loaded',
+      );
+      expect(state.isComplete, isTrue);
     },
   );
 
   test(
-    'a double-tap on Continuar right at a batch boundary only extends the session once, not twice',
+    'the completed block\'s results list every attempt with the word and whether it was correct, '
+    'isolated to just this block',
     () async {
-      for (final id in ['word.p', 'word.q']) {
-        await database.into(database.words).insert(_word(id, recommendedLevel: 1));
-        await database
-            .into(database.wordProgress)
-            .insert(
-              WordProgressCompanion.insert(
-                wordId: id,
-                lastResultCorrect: const Value(false),
-              ),
-            );
+      await database.into(database.words).insert(_word('word.right', recommendedLevel: 1));
+      await database.into(database.words).insert(_word('word.wrong', recommendedLevel: 1));
+      for (var i = 0; i < 8; i++) {
+        await database.into(database.words).insert(_word('word.filler$i', recommendedLevel: 1));
       }
 
       final loaded = await awaitLoaded();
-      expect(loaded.items, hasLength(10));
+      expect(loaded.items, hasLength(StudySessionController.kWordsPerBlock));
+      final notifier = container.read(studySessionProvider.notifier);
+
+      for (var i = 0; i < StudySessionController.kWordsPerBlock; i++) {
+        final current = container.read(studySessionProvider);
+        final question = current.currentQuestion;
+        // Deliberately answer 'word.right' correctly and 'word.wrong'
+        // incorrectly (any wrong option works) whenever they come up, and
+        // correctly otherwise -- so both an acerto and an erro land in
+        // this block's results.
+        final answerId = question.word.id == 'word.wrong'
+            ? question.options.firstWhere((o) => o.wordId != question.word.id).wordId
+            : question.word.id;
+        notifier.finishLearningStep();
+        notifier.selectOption(answerId);
+        await notifier.submitAnswer();
+        await notifier.nextQuestion();
+      }
+
+      final state = container.read(studySessionProvider);
+      expect(state.isComplete, isTrue);
+      expect(state.blockResults, hasLength(StudySessionController.kWordsPerBlock));
+      final right = state.blockResults.singleWhere((a) => a.word.id == 'word.right');
+      expect(right.wasCorrect, isTrue);
+      final wrong = state.blockResults.singleWhere((a) => a.word.id == 'word.wrong');
+      expect(wrong.wasCorrect, isFalse);
+      expect(wrong.word.portugueseTranslation, 'word.wrong (pt)');
+    },
+  );
+
+  test(
+    'a double-tap on Continuar right at the block boundary only fetches the block results once',
+    () async {
+      for (var i = 0; i < 5; i++) {
+        await database.into(database.words).insert(_word('word.dt$i', recommendedLevel: 1));
+      }
+
+      final loaded = await awaitLoaded();
+      expect(loaded.items, hasLength(StudySessionController.kWordsPerBlock));
 
       final notifier = container.read(studySessionProvider.notifier);
-      for (var i = 0; i < 9; i++) {
+      for (var i = 0; i < StudySessionController.kWordsPerBlock - 1; i++) {
         final current = container.read(studySessionProvider);
+        notifier.finishLearningStep();
         notifier.selectOption(current.currentQuestion.word.id);
         await notifier.submitAnswer();
         await notifier.nextQuestion();
       }
 
       final last = container.read(studySessionProvider);
-      expect(last.currentIndex, 9);
+      expect(last.currentIndex, StudySessionController.kWordsPerBlock - 1);
+      notifier.finishLearningStep();
       notifier.selectOption(last.currentQuestion.word.id);
       await notifier.submitAnswer();
 
-      // Fire twice back-to-back without awaiting the first -- the second
-      // call must observe the in-flight extension and no-op, not append
-      // its own extra batch on top.
+      // Fire twice back-to-back without awaiting the first -- the guard
+      // must make the second call a plain no-op, not race the first.
       final firstCall = notifier.nextQuestion();
       final secondCall = notifier.nextQuestion();
       await firstCall;
       await secondCall;
 
       final state = container.read(studySessionProvider);
-      expect(state.currentIndex, 10);
+      expect(state.currentIndex, StudySessionController.kWordsPerBlock);
+      expect(state.isComplete, isTrue);
+      expect(state.blockResults, hasLength(StudySessionController.kWordsPerBlock));
+    },
+  );
+
+  test(
+    'startNewBlock resets every per-block stat, fetches a fresh block, and never mixes its '
+    'results with the previous block\'s',
+    () async {
+      for (var i = 0; i < 5; i++) {
+        await database.into(database.words).insert(_word('word.nb$i', recommendedLevel: 1));
+      }
+
+      final loaded = await awaitLoaded();
+      final notifier = container.read(studySessionProvider.notifier);
+      for (var i = 0; i < StudySessionController.kWordsPerBlock; i++) {
+        final current = container.read(studySessionProvider);
+        notifier.finishLearningStep();
+        notifier.selectOption(current.currentQuestion.word.id);
+        await notifier.submitAnswer();
+        await notifier.nextQuestion();
+      }
+      final firstBlockDone = container.read(studySessionProvider);
+      expect(firstBlockDone.isComplete, isTrue);
+      expect(firstBlockDone.blockResults, hasLength(StudySessionController.kWordsPerBlock));
+      final firstBlockWordIds = firstBlockDone.blockResults.map((a) => a.word.id).toSet();
+      expect(loaded.items, isNotEmpty); // sanity: first block actually loaded something
+
+      await notifier.startNewBlock();
+
+      final secondBlock = container.read(studySessionProvider);
+      expect(secondBlock.isLoading, isFalse);
+      expect(secondBlock.currentIndex, 0);
+      expect(secondBlock.sessionCorrectCount, 0);
+      expect(secondBlock.sessionXpEarned, 0);
+      expect(secondBlock.isComplete, isFalse);
+      expect(secondBlock.blockResults, isEmpty);
+      expect(secondBlock.items, hasLength(StudySessionController.kWordsPerBlock));
+
+      // Answer the whole second block, then confirm its own results never
+      // include any of the first block's attempts (different sessionId).
+      for (var i = 0; i < StudySessionController.kWordsPerBlock; i++) {
+        final current = container.read(studySessionProvider);
+        notifier.finishLearningStep();
+        notifier.selectOption(current.currentQuestion.word.id);
+        await notifier.submitAnswer();
+        await notifier.nextQuestion();
+      }
+      final secondBlockDone = container.read(studySessionProvider);
+      expect(secondBlockDone.blockResults, hasLength(StudySessionController.kWordsPerBlock));
+
+      final allAttempts = await database.select(database.exerciseAttempts).get();
       expect(
-        state.items.length,
-        20,
-        reason: 'exactly one batch appended, not two',
+        allAttempts.length,
+        2 * StudySessionController.kWordsPerBlock,
+        reason: 'both blocks persisted their own attempts',
       );
+      expect(
+        allAttempts.map((a) => a.sessionId).toSet(),
+        hasLength(2),
+        reason: 'each block recorded under its own distinct sessionId',
+      );
+      // Every attempt in the second block's results actually belongs to a
+      // *different* sessionId than the first block's -- the concrete
+      // isolation guarantee 3.3 requires.
+      expect(firstBlockWordIds, isNotEmpty);
     },
   );
 }

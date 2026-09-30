@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/repositories/progress_repository.dart';
+import '../core/services/level_curve.dart';
+import '../providers/home_providers.dart';
 import '../providers/immersion_mode_providers.dart';
 import '../providers/navigation_providers.dart';
 import '../providers/study_providers.dart';
@@ -237,45 +240,131 @@ class _SessionSummary extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('🎉', style: TextStyle(fontSize: 56)),
+    final profileAsync = ref.watch(userProfileStreamProvider);
+    final correct = session.blockResults.where((a) => a.wasCorrect).toList();
+    final wrong = session.blockResults.where((a) => !a.wasCorrect).toList();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🎉', style: TextStyle(fontSize: 56)),
+          const SizedBox(height: 16),
+          Text(
+            'Bloco concluído!',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: NeonColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${session.sessionCorrectCount} de ${session.items.length} certas',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: NeonColors.textPrimary,
+            ),
+          ),
+          Text(
+            '+${session.sessionXpEarned} XP neste bloco',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: NeonColors.purple,
+            ),
+          ),
+          const SizedBox(height: 20),
+          if (correct.isNotEmpty)
+            _ResultList(title: '✅ Acertos', color: NeonColors.green, attempts: correct),
+          if (wrong.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Text(
-              'Sessão concluída!',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: NeonColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '${session.sessionCorrectCount} de ${session.items.length} certas',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: NeonColors.textPrimary,
-              ),
-            ),
-            Text(
-              '+${session.sessionXpEarned} XP nesta sessão',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: NeonColors.purple,
-              ),
-            ),
-            const SizedBox(height: 24),
-            GlowButton(
-              label: 'Voltar para a Home',
-              color: NeonColors.cyan,
-              onTap: () {
-                ref.invalidate(studySessionProvider);
-                ref.read(studySessionStartedProvider.notifier).reset();
-                ref.read(selectedTabIndexProvider.notifier).select(0);
-              },
-            ),
+            _ResultList(title: '❌ Erros', color: NeonColors.red, attempts: wrong),
           ],
-        ),
+          const SizedBox(height: 20),
+          profileAsync.when(
+            data: (profile) => _LevelStatus(currentLevel: profile.currentLevel),
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
+          ),
+          const SizedBox(height: 20),
+          GlowButton(
+            label: 'Continuar',
+            color: NeonColors.green,
+            onTap: () => ref.read(studySessionProvider.notifier).startNewBlock(),
+          ),
+          const SizedBox(height: 10),
+          GlowButton(
+            label: 'Voltar para a Home',
+            color: NeonColors.cyan,
+            filled: false,
+            onTap: () {
+              ref.invalidate(studySessionProvider);
+              ref.read(studySessionStartedProvider.notifier).reset();
+              ref.read(selectedTabIndexProvider.notifier).select(0);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResultList extends StatelessWidget {
+  const _ResultList({
+    required this.title,
+    required this.color,
+    required this.attempts,
+  });
+
+  final String title;
+  final Color color;
+  final List<StudyBlockAttempt> attempts;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          for (final attempt in attempts)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                '${attempt.word.englishTerm} → ${attempt.word.portugueseTranslation}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: NeonColors.textPrimary,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LevelStatus extends StatelessWidget {
+  const _LevelStatus({required this.currentLevel});
+
+  final int currentLevel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final atMaxLevel = currentLevel >= LevelCurve.maxLevel;
+    return Text(
+      atMaxLevel
+          ? 'Nível $currentLevel — você já está no nível máximo! 🏆'
+          : 'Nível $currentLevel — próximo nível: ${currentLevel + 1}',
+      textAlign: TextAlign.center,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        color: NeonColors.textSecondary,
       ),
     );
   }

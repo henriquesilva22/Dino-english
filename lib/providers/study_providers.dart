@@ -41,6 +41,7 @@ class StudySessionState {
     this.immersionModeEnabled = false,
     this.isWordTranslationRevealed = false,
     this.isSentenceTranslationRevealed = false,
+    this.blockResults = const [],
   });
 
   final List<StudyQuestion> items;
@@ -75,11 +76,16 @@ class StudySessionState {
   final bool isWordTranslationRevealed;
   final bool isSentenceTranslationRevealed;
 
-  /// Only ever true if the word bank itself is empty/unreachable -- see
-  /// `StudySessionController.nextQuestion`, which always extends [items]
-  /// with another batch before letting [currentIndex] cross its end. A
-  /// real study session never runs out of words on its own; this is a
-  /// defensive fallback, not the normal way a session ends.
+  /// This block's attempts (oldest first), populated once [isComplete]
+  /// becomes true -- see `StudySessionController.nextQuestion`. Empty
+  /// while the block is still in progress.
+  final List<StudyBlockAttempt> blockResults;
+
+  /// True once the learner has answered the block's last
+  /// ([StudySessionController.kWordsPerBlock]) question and tapped
+  /// "Continuar" -- [items] never grows past that fixed size, so reaching
+  /// its end is the normal, expected way a block finishes, not just a
+  /// defensive fallback for an empty word bank.
   bool get isComplete => !isLoading && currentIndex >= items.length;
   StudyQuestion get currentQuestion => items[currentIndex];
 
@@ -97,6 +103,7 @@ class StudySessionState {
     bool? immersionModeEnabled,
     bool? isWordTranslationRevealed,
     bool? isSentenceTranslationRevealed,
+    List<StudyBlockAttempt>? blockResults,
   }) {
     return StudySessionState(
       items: items ?? this.items,
@@ -115,32 +122,38 @@ class StudySessionState {
           isWordTranslationRevealed ?? this.isWordTranslationRevealed,
       isSentenceTranslationRevealed:
           isSentenceTranslationRevealed ?? this.isSentenceTranslationRevealed,
+      blockResults: blockResults ?? this.blockResults,
     );
   }
 }
 
-/// Drives one study session: builds it from [WordSelectionService] +
-/// [DistractorPicker], then records each answer through
-/// [ProgressRepository.recordAnswer] -- the same orchestration path the
-/// minigame uses.
+/// Drives one study block of exactly [kWordsPerBlock] words: builds it
+/// from [WordSelectionService] + [DistractorPicker], then records each
+/// answer through [ProgressRepository.recordAnswer] -- the same
+/// orchestration path the minigame uses.
 ///
-/// The session is infinite by design: [items] is a growing list, fetched
-/// in batches of [_kBatchSize]. [nextQuestion] extends it with another
-/// batch whenever the learner is about to reach the end, instead of ever
-/// treating "this batch is done" as "there is nothing left to study" --
-/// [WordSelectionService.buildSession] guarantees a batch is always full
-/// as long as the word bank has any active words at all, falling back to
-/// maintenance repetition once nothing is strictly due/new/weak.
+/// A block is a fixed size, not an infinite stream: [items] is loaded once
+/// (by [_loadSession] on first build, or [startNewBlock] afterwards) and
+/// never grows. [nextQuestion] simply advances [currentIndex]; once it
+/// would cross [items]'s end, the block is complete (see
+/// [StudySessionState.isComplete]) and this fetches that block's own
+/// results (see [StudySessionState.blockResults]) for the summary screen,
+/// rather than ever fetching more words to keep the session going.
 class StudySessionController extends Notifier<StudySessionState> {
-  final String _sessionId = const Uuid().v4();
+  /// One id per block, not per controller instance -- regenerated in
+  /// [startNewBlock] so each block's `exercise_attempts` rows (grouped by
+  /// this id) never mix with another block's when
+  /// `fetchAttemptsForSession` is queried for the results screen.
+  String _sessionId = const Uuid().v4();
 
-  static const int _kBatchSize = 10;
+  /// Fixed number of questions per study block, per spec -- a block never
+  /// grows past this, unlike the old (buggy) unbounded-batch design.
+  static const int kWordsPerBlock = 10;
 
-  /// True while a batch fetch is in flight -- guards [nextQuestion]
-  /// against a double-tap right at a batch boundary appending two batches
-  /// instead of one (the await inside it yields control back to the event
-  /// loop, unlike the old fully-synchronous version).
-  bool _isExtending = false;
+  /// True while [nextQuestion] is mid-flight at the block boundary --
+  /// guards against a double-tap on "Continuar" firing
+  /// `fetchAttemptsForSession` (and the resulting state transition) twice.
+  bool _isAdvancing = false;
 
   @override
   StudySessionState build() {
@@ -150,7 +163,7 @@ class StudySessionController extends Notifier<StudySessionState> {
 
   Future<void> _loadSession() async {
     final immersionModeEnabled = ref.read(immersionModeEnabledProvider);
-    final items = await _fetchNextBatch(recentlyShownWordIds: const []);
+    final items = await _fetchBlockWords(recentlyShownWordIds: const []);
 
     final firstIsNew = items.isNotEmpty && items.first.isNewWord;
     state = state.copyWith(
@@ -163,11 +176,33 @@ class StudySessionController extends Notifier<StudySessionState> {
     );
   }
 
-  /// Fetches and shapes one batch of [_kBatchSize] questions. Returns an
-  /// empty list only in the genuinely exceptional case the whole word bank
-  /// is empty -- [WordSelectionService.buildSession] otherwise always
-  /// returns a full batch (with repetition once nothing new/due remains).
-  Future<List<StudyQuestion>> _fetchNextBatch({
+  /// Starts a brand-new [kWordsPerBlock]-word block from the results
+  /// screen's "Continuar" button -- a fresh [_sessionId] and a fully reset
+  /// state (score/combo-equivalent counters, `blockResults`), keeping only
+  /// the immersion-mode setting captured at the very first block.
+  Future<void> startNewBlock() async {
+    final immersionModeEnabled = state.immersionModeEnabled;
+    _sessionId = const Uuid().v4();
+    state = StudySessionState(immersionModeEnabled: immersionModeEnabled);
+
+    final items = await _fetchBlockWords(recentlyShownWordIds: const []);
+    final firstIsNew = items.isNotEmpty && items.first.isNewWord;
+    state = StudySessionState(
+      items: items,
+      isLoading: false,
+      immersionModeEnabled: immersionModeEnabled,
+      isLearningStep: items.isNotEmpty && (firstIsNew || immersionModeEnabled),
+      isWordTranslationRevealed: firstIsNew,
+      isSentenceTranslationRevealed: firstIsNew,
+    );
+  }
+
+  /// Fetches and shapes this block's [kWordsPerBlock] questions in one
+  /// shot. Returns an empty list only in the genuinely exceptional case
+  /// the whole word bank is empty -- [WordSelectionService.buildSession]
+  /// otherwise always returns a full batch (with repetition once nothing
+  /// new/due remains).
+  Future<List<StudyQuestion>> _fetchBlockWords({
     required List<String> recentlyShownWordIds,
   }) async {
     final wordRepository = ref.read(wordRepositoryProvider);
@@ -185,7 +220,7 @@ class StudySessionController extends Notifier<StudySessionState> {
       kind: SessionKind.study,
       userLevel: profile.currentLevel,
       now: DateTime.now(),
-      count: _kBatchSize,
+      count: kWordsPerBlock,
       recentlyShownWordIds: recentlyShownWordIds,
     );
 
@@ -276,45 +311,44 @@ class StudySessionController extends Notifier<StudySessionState> {
     );
   }
 
-  /// Advances to the next question, extending [items] with another batch
-  /// first if the learner has reached its end -- the mechanism that keeps
-  /// "Estudar" from ever dead-ending into "Sessão concluída"/"Nenhuma
-  /// palavra disponível" just because one batch ran out.
+  /// Advances to the next question, or -- once the block's fixed
+  /// [kWordsPerBlock] questions are all answered -- ends the block: fetches
+  /// its own results (via `sessionId`) into [StudySessionState.blockResults]
+  /// for the summary screen. No more words are ever fetched past this
+  /// point; unlike the old unbounded design, [items] never grows again.
   Future<void> nextQuestion() async {
-    if (!state.isAnswered || _isExtending) return;
-    final newIndex = state.currentIndex + 1;
+    if (!state.isAnswered || _isAdvancing) return;
+    _isAdvancing = true;
+    try {
+      final newIndex = state.currentIndex + 1;
 
-    if (newIndex >= state.items.length) {
-      _isExtending = true;
-      try {
-        final recentlyShown = state.items
-            .skip((state.items.length - 5).clamp(0, state.items.length))
-            .map((q) => q.word.id)
-            .toList();
-        final nextBatch = await _fetchNextBatch(
-          recentlyShownWordIds: recentlyShown,
+      if (newIndex >= state.items.length) {
+        final results = await ref
+            .read(progressRepositoryProvider)
+            .fetchAttemptsForSession(_sessionId);
+        state = state.copyWith(
+          currentIndex: newIndex,
+          isAnswered: false,
+          clearSelectedWordId: true,
+          blockResults: results,
         );
-        if (nextBatch.isNotEmpty) {
-          state = state.copyWith(items: [...state.items, ...nextBatch]);
-        }
-      } finally {
-        _isExtending = false;
+        return;
       }
-    }
 
-    final items = state.items;
-    final nextIsNew = newIndex < items.length && items[newIndex].isNewWord;
-    final nextIsLearning =
-        newIndex < items.length &&
-        (nextIsNew || state.immersionModeEnabled);
-    state = state.copyWith(
-      currentIndex: newIndex,
-      isAnswered: false,
-      clearSelectedWordId: true,
-      isLearningStep: nextIsLearning,
-      isWordTranslationRevealed: nextIsNew,
-      isSentenceTranslationRevealed: nextIsNew,
-    );
+      final items = state.items;
+      final nextIsNew = items[newIndex].isNewWord;
+      final nextIsLearning = nextIsNew || state.immersionModeEnabled;
+      state = state.copyWith(
+        currentIndex: newIndex,
+        isAnswered: false,
+        clearSelectedWordId: true,
+        isLearningStep: nextIsLearning,
+        isWordTranslationRevealed: nextIsNew,
+        isSentenceTranslationRevealed: nextIsNew,
+      );
+    } finally {
+      _isAdvancing = false;
+    }
   }
 }
 
