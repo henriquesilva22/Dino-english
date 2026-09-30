@@ -30,13 +30,18 @@ class WordSlashRoundConfig {
 
   /// Fixed for every round -- difficulty never comes from crowding more
   /// words on screen, only from movement/timing (see class doc).
-  static const int pairsOnScreen = 3;
+  static const int pairsOnScreen = 4;
 
   static const double bubbleRadius = 46;
 
   static const int basePointsPerPair = 100;
   static const int comboCap = 10;
   static const int xpPerPair = 5;
+
+  /// Added to the round's remaining time on every correct pair -- rewards
+  /// skilled/fast play with more time to keep going, uncapped (matches
+  /// combo's own uncapped-until-[comboCap] spirit).
+  static const int bonusSecondsPerCorrectPair = 2;
 
   static const List<WordSlashRoundConfig> all = [
     WordSlashRoundConfig(

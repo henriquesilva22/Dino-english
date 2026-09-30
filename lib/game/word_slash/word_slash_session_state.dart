@@ -40,6 +40,7 @@ class WordSlashSessionState {
     this.swipeHitBubbleIds = const {},
     this.lastOutcome = WordSlashOutcome.none,
     this.lastResolvedWordId,
+    this.selectedBubbleId,
   });
 
   final WordSlashSessionPhase sessionPhase;
@@ -87,6 +88,15 @@ class WordSlashSessionState {
   /// .collectIncorrectWord()`'s `wordId: null`).
   final String? lastResolvedWordId;
 
+  /// The bubble a previous, already-finished gesture cut while nothing was
+  /// selected yet -- lets the player cut the two halves of a pair as two
+  /// separate swipes (lift finger in between) instead of one continuous
+  /// stroke through both. Cleared the instant a second cut resolves the
+  /// pair (correct or wrong) or a new round starts; persists across
+  /// [beginSwipe]/[endSwipe] calls on purpose, unlike [swipeHitBubbleIds]
+  /// which only tracks the *current* in-flight gesture.
+  final String? selectedBubbleId;
+
   bool get isRoundComplete => roundTimeRemaining == Duration.zero;
 
   bool get isFinalRound => roundNumber >= WordSlashRoundConfig.totalRounds;
@@ -115,6 +125,8 @@ class WordSlashSessionState {
     WordSlashOutcome? lastOutcome,
     String? lastResolvedWordId,
     bool clearLastResolvedWordId = false,
+    String? selectedBubbleId,
+    bool clearSelectedBubbleId = false,
   }) {
     return WordSlashSessionState(
       sessionPhase: sessionPhase ?? this.sessionPhase,
@@ -134,6 +146,9 @@ class WordSlashSessionState {
       lastResolvedWordId: clearLastResolvedWordId
           ? null
           : (lastResolvedWordId ?? this.lastResolvedWordId),
+      selectedBubbleId: clearSelectedBubbleId
+          ? null
+          : (selectedBubbleId ?? this.selectedBubbleId),
     );
   }
 
@@ -244,6 +259,7 @@ class WordSlashSessionState {
       swipeHitBubbleIds: const {},
       lastOutcome: WordSlashOutcome.none,
       clearLastResolvedWordId: true,
+      clearSelectedBubbleId: true,
     );
   }
 
@@ -339,7 +355,7 @@ class WordSlashSessionState {
   /// Light repulsion, not real physics ("boa experiência mobile > física
   /// perfeita" per spec): bubbles closer than their combined radii get a
   /// small outward velocity nudge instead of overlapping indefinitely.
-  /// O(n^2) but n is always 6, so cost is irrelevant.
+  /// O(n^2) but n is always 8, so cost is irrelevant.
   List<WordSlashBubble> _applySeparation(List<WordSlashBubble> input) {
     const margin = 6.0;
     const pushStrength = 4.0;
@@ -436,7 +452,15 @@ class WordSlashSessionState {
   }
 
   /// Checks the segment between two consecutive pan-update points against
-  /// every currently-active bubble, accumulating hits for this gesture.
+  /// the currently-active bubbles, registering at most ONE new hit per
+  /// call: when bubbles visually overlap, a single touch point can fall
+  /// within both circles' padded radius at once, and the player expects
+  /// whichever bubble is drawn on top -- last in [bubbles], matching the
+  /// `Stack`'s paint order in the screen widget -- to be the one they cut,
+  /// not whichever happens to be underneath. Iterating back-to-front and
+  /// stopping at the first match achieves exactly that, while a single
+  /// continuous stroke can still register several *different* bubbles
+  /// across its several segments (one topmost bubble per segment).
   WordSlashSessionState registerSwipeSegment(
     Offset a,
     Offset b, {
@@ -445,34 +469,63 @@ class WordSlashSessionState {
     if (sessionPhase != WordSlashSessionPhase.running || isRoundComplete) {
       return this;
     }
-    final hits = {...swipeHitBubbleIds};
-    for (final bubble in bubbles) {
+    for (var i = bubbles.length - 1; i >= 0; i--) {
+      final bubble = bubbles[i];
       if (bubble.intersectsSegment(a, b, padding: hitPadding)) {
-        hits.add(bubble.id);
+        if (swipeHitBubbleIds.contains(bubble.id)) return this;
+        return _copyWith(swipeHitBubbleIds: {...swipeHitBubbleIds, bubble.id});
       }
     }
-    if (hits.length == swipeHitBubbleIds.length) return this;
-    return _copyWith(swipeHitBubbleIds: hits);
+    return this;
   }
 
-  /// Resolves the gesture started by [beginSwipe]. Exactly two distinct
-  /// bubbles crossed, same [WordSlashBubble.pairId] -> correct pair.
-  /// Anything else -- zero, one, two mismatched, or more than two -- is
-  /// not a match: zero/one is an incomplete swipe (pure no-op, nothing
-  /// changes); two-mismatched or more-than-two is a wrong attempt (combo
-  /// reset). Treating ">2 crossed" as wrong rather than guessing which two
-  /// were "intended" keeps the rule exactly what the spec states --
-  /// "exactly two" -- instead of a silent, non-obvious tie-break.
+  /// Resolves the gesture started by [beginSwipe]. Cutting a pair can be
+  /// done either as one continuous stroke through both bubbles, or as two
+  /// separate strokes with the finger lifted in between -- [selectedBubbleId]
+  /// remembers the first bubble cut by an earlier, already-finished gesture
+  /// so a *later* gesture's single cut can complete the pair. Concretely:
+  /// the bubble(s) this gesture just crossed are combined with whatever was
+  /// already selected (deduped), and exactly two distinct bubbles total
+  /// determine the outcome -- same [WordSlashBubble.pairId] is correct,
+  /// different is wrong. Fewer than two (nothing crossed, or a first cut
+  /// with nothing selected yet) just (re)selects and waits; more than two
+  /// (e.g. a fresh double-cut while one was already selected) is wrong,
+  /// same "no guessing which two were intended" rule as before.
   WordSlashSessionState endSwipe({required Random random}) {
     if (sessionPhase != WordSlashSessionPhase.running || isRoundComplete) {
       return _copyWith(swipeHitBubbleIds: const {});
     }
-    final hitBubbles = bubbles.where((b) => swipeHitBubbleIds.contains(b.id)).toList();
-    if (hitBubbles.length < 2) {
+    final gestureHits = bubbles.where((b) => swipeHitBubbleIds.contains(b.id)).toList();
+    if (gestureHits.isEmpty) {
+      // Missed entirely -- leaves any existing selection untouched so the
+      // player can keep trying to find the second bubble.
       return _copyWith(swipeHitBubbleIds: const {}, lastOutcome: WordSlashOutcome.none);
     }
-    if (hitBubbles.length == 2 && hitBubbles[0].pairId == hitBubbles[1].pairId) {
-      return _applyCorrectPair(hitBubbles[0], hitBubbles[1], random: random);
+
+    final candidates = <WordSlashBubble>[];
+    final seenIds = <String>{};
+    final previouslySelectedId = selectedBubbleId;
+    if (previouslySelectedId != null) {
+      for (final b in bubbles) {
+        if (b.id == previouslySelectedId && seenIds.add(b.id)) {
+          candidates.add(b);
+          break;
+        }
+      }
+    }
+    for (final b in gestureHits) {
+      if (seenIds.add(b.id)) candidates.add(b);
+    }
+
+    if (candidates.length == 1) {
+      return _copyWith(
+        swipeHitBubbleIds: const {},
+        selectedBubbleId: candidates.single.id,
+        lastOutcome: WordSlashOutcome.none,
+      );
+    }
+    if (candidates.length == 2 && candidates[0].pairId == candidates[1].pairId) {
+      return _applyCorrectPair(candidates[0], candidates[1], random: random);
     }
     return _applyWrongPair();
   }
@@ -484,6 +537,7 @@ class WordSlashSessionState {
       swipeHitBubbleIds: const {},
       lastOutcome: WordSlashOutcome.wrong,
       clearLastResolvedWordId: true,
+      clearSelectedBubbleId: true,
     );
   }
 
@@ -503,11 +557,17 @@ class WordSlashSessionState {
     final newCombo = combo + 1 > WordSlashRoundConfig.comboCap
         ? WordSlashRoundConfig.comboCap
         : combo + 1;
+    // Rewards a correct cut with a few extra seconds on the round clock --
+    // uncapped, same spirit as the combo multiplier rewarding skilled play.
+    final extendedTime =
+        (roundTimeRemaining ?? Duration.zero) +
+        const Duration(seconds: WordSlashRoundConfig.bonusSecondsPerCorrectPair);
     return _copyWith(
       bubbles: newBubbles,
       pendingWords: replacement == null
           ? pendingWords
           : pendingWords.where((w) => w.id != replacement.id).toList(),
+      roundTimeRemaining: extendedTime,
       score: score + WordSlashRoundConfig.basePointsPerPair * newCombo,
       combo: newCombo,
       maxCombo: newCombo > maxCombo ? newCombo : maxCombo,
@@ -516,6 +576,7 @@ class WordSlashSessionState {
       swipeHitBubbleIds: const {},
       lastOutcome: WordSlashOutcome.correct,
       lastResolvedWordId: a.pairId,
+      clearSelectedBubbleId: true,
     );
   }
 }

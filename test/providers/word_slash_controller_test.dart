@@ -272,14 +272,14 @@ void main() {
   );
 
   test(
-    'a word bank sized for exactly one round (3 pairs) still keeps supplying pairs after several correct '
+    'a word bank sized for exactly one round (4 pairs) still keeps supplying pairs after several correct '
     'answers -- WordSelectionService\'s repetition guarantee reaches the real controller, words are never '
     '"exhausted"',
     () async {
-      await setUpWith(3); // exactly pairsOnScreen -- no spare words at all
+      await setUpWith(4); // exactly pairsOnScreen -- no spare words at all
       final state = await awaitLoaded();
       final notifier = container.read(wordSlashControllerProvider.notifier);
-      expect(state.bubbles, hasLength(6));
+      expect(state.bubbles, hasLength(8));
 
       // Solve several pairs in a row -- with only 3 distinct words ever
       // existing, every replacement necessarily repeats one already seen.

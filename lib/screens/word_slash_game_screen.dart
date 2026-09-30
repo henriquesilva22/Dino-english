@@ -201,7 +201,12 @@ class _WordSlashPlayAreaState extends ConsumerState<_WordSlashPlayArea>
                               Positioned(
                                 left: bubble.position.dx - bubble.radius,
                                 top: bubble.position.dy - bubble.radius,
-                                child: WordSlashBubbleWidget(bubble: bubble),
+                                child: WordSlashBubbleWidget(
+                                  bubble: bubble,
+                                  isHit:
+                                      bubble.id == state.selectedBubbleId ||
+                                      state.swipeHitBubbleIds.contains(bubble.id),
+                                ),
                               ),
                           ],
                         ),
