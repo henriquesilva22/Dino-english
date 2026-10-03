@@ -12,7 +12,8 @@ const String kBackgroundMusicAsset = 'melancholic_tronic_v2.mp3';
 /// How `FlameAdventureSoundService` asks flame_audio to build one SFX's
 /// reusable player pool -- injectable purely for tests, defaulting to
 /// [FlameAudio.createPool] (a real, platform-channel-backed call).
-typedef CreateAudioPool = Future<AudioPool> Function(String sound, {required int maxPlayers});
+typedef CreateAudioPool =
+    Future<AudioPool> Function(String sound, {required int maxPlayers});
 
 /// Pet Adventure's sound API. Extracted as an interface (mirroring
 /// `SpeechService`/`FlutterTtsSpeechService`) so tests can fake it --
@@ -76,7 +77,10 @@ class FlameAdventureSoundService implements AdventureSoundService {
     if (_sfxPoolsReady) return;
     _sfxPoolsReady = true;
     for (final sfx in AdventureSfx.values) {
-      _sfxPools[sfx] = await _createPool(sfx.fileName, maxPlayers: _maxPlayersPerSfx);
+      _sfxPools[sfx] = await _createPool(
+        sfx.fileName,
+        maxPlayers: _maxPlayersPerSfx,
+      );
     }
   }
 
@@ -85,7 +89,11 @@ class FlameAdventureSoundService implements AdventureSoundService {
 
   @override
   void playMusic({double volume = 0.35}) {
-    unawaited(_ensureBgmReady().then((_) => _bgm.play(kBackgroundMusicAsset, volume: volume)));
+    unawaited(
+      _ensureBgmReady().then(
+        (_) => _bgm.play(kBackgroundMusicAsset, volume: volume),
+      ),
+    );
   }
 
   @override

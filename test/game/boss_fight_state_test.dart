@@ -67,13 +67,31 @@ void main() {
     expect(const BossFightState(hp: 0).band, BossHpBand.desperate);
   });
 
-  test('damageForWordDifficulty returns normal damage for easy/medium words', () {
-    expect(BossFightState.damageForWordDifficulty(1), BossFightState.normalWordDamage);
-    expect(BossFightState.damageForWordDifficulty(2), BossFightState.normalWordDamage);
-  });
+  test(
+    'damageForWordDifficulty returns normal damage for easy/medium words',
+    () {
+      expect(
+        BossFightState.damageForWordDifficulty(1),
+        BossFightState.normalWordDamage,
+      );
+      expect(
+        BossFightState.damageForWordDifficulty(2),
+        BossFightState.normalWordDamage,
+      );
+    },
+  );
 
-  test('damageForWordDifficulty returns hard damage at the threshold and above', () {
-    expect(BossFightState.damageForWordDifficulty(3), BossFightState.hardWordDamage);
-    expect(BossFightState.damageForWordDifficulty(4), BossFightState.hardWordDamage);
-  });
+  test(
+    'damageForWordDifficulty returns hard damage at the threshold and above',
+    () {
+      expect(
+        BossFightState.damageForWordDifficulty(3),
+        BossFightState.hardWordDamage,
+      );
+      expect(
+        BossFightState.damageForWordDifficulty(4),
+        BossFightState.hardWordDamage,
+      );
+    },
+  );
 }

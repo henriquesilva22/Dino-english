@@ -29,7 +29,8 @@ class _EggIdlePulseState extends State<EggIdlePulse>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final scale = 0.97 + Curves.easeInOut.transform(_controller.value) * 0.06;
+        final scale =
+            0.97 + Curves.easeInOut.transform(_controller.value) * 0.06;
         return Transform.scale(scale: scale, child: child);
       },
       child: widget.child,

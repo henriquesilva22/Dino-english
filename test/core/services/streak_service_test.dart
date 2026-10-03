@@ -37,16 +37,19 @@ void main() {
       expect(streak, 3);
     });
 
-    test('still counts as ongoing if only yesterday was active (today not studied yet)', () {
-      final streak = service.currentStreak(
-        activeDates: {
-          today.subtract(const Duration(days: 1)),
-          today.subtract(const Duration(days: 2)),
-        },
-        today: today,
-      );
-      expect(streak, 2);
-    });
+    test(
+      'still counts as ongoing if only yesterday was active (today not studied yet)',
+      () {
+        final streak = service.currentStreak(
+          activeDates: {
+            today.subtract(const Duration(days: 1)),
+            today.subtract(const Duration(days: 2)),
+          },
+          today: today,
+        );
+        expect(streak, 2);
+      },
+    );
 
     test('breaks after a full gap day', () {
       final streak = service.currentStreak(
@@ -59,16 +62,19 @@ void main() {
       expect(streak, 0);
     });
 
-    test('multiple timestamps on the same calendar day still count as one day', () {
-      final streak = service.currentStreak(
-        activeDates: {
-          DateTime(2026, 1, 10, 8),
-          DateTime(2026, 1, 10, 21, 30),
-          DateTime(2026, 1, 9, 6),
-        },
-        today: today,
-      );
-      expect(streak, 2);
-    });
+    test(
+      'multiple timestamps on the same calendar day still count as one day',
+      () {
+        final streak = service.currentStreak(
+          activeDates: {
+            DateTime(2026, 1, 10, 8),
+            DateTime(2026, 1, 10, 21, 30),
+            DateTime(2026, 1, 9, 6),
+          },
+          today: today,
+        );
+        expect(streak, 2);
+      },
+    );
   });
 }

@@ -8,7 +8,8 @@ import 'word_slash_sfx.dart';
 /// reusable player pool -- injectable purely for tests, defaulting to
 /// [FlameAudio.createPool] (a real, platform-channel-backed call). Mirrors
 /// `AdventureSoundService`'s `CreateAudioPool` typedef exactly.
-typedef CreateAudioPool = Future<AudioPool> Function(String sound, {required int maxPlayers});
+typedef CreateAudioPool =
+    Future<AudioPool> Function(String sound, {required int maxPlayers});
 
 /// Word Slash's sound API -- its own small interface/impl pair rather than
 /// literally sharing `AdventureSoundService` (a different sound
@@ -47,7 +48,10 @@ class FlameWordSlashSoundService implements WordSlashSoundService {
     if (_poolsReady) return;
     _poolsReady = true;
     for (final sfx in WordSlashSfx.values) {
-      _pools[sfx] = await _createPool(sfx.fileName, maxPlayers: _maxPlayersPerSfx);
+      _pools[sfx] = await _createPool(
+        sfx.fileName,
+        maxPlayers: _maxPlayersPerSfx,
+      );
     }
   }
 

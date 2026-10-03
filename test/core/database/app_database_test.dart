@@ -15,18 +15,20 @@ void main() {
   });
 
   test('opens and creates every table with no errors', () async {
-    await database.into(database.words).insert(
-      WordsCompanion.insert(
-        id: 'word.animals.dog',
-        englishTerm: 'dog',
-        portugueseTranslation: 'cachorro',
-        category: 'animals',
-        difficulty: 1,
-        recommendedLevel: 1,
-        exampleSentenceEn: 'The dog is happy.',
-        exampleSentencePt: 'O cachorro está feliz.',
-      ),
-    );
+    await database
+        .into(database.words)
+        .insert(
+          WordsCompanion.insert(
+            id: 'word.animals.dog',
+            englishTerm: 'dog',
+            portugueseTranslation: 'cachorro',
+            category: 'animals',
+            difficulty: 1,
+            recommendedLevel: 1,
+            exampleSentenceEn: 'The dog is happy.',
+            exampleSentencePt: 'O cachorro está feliz.',
+          ),
+        );
 
     final words = await database.select(database.words).get();
     expect(words, hasLength(1));
@@ -35,21 +37,28 @@ void main() {
 
   test('word_progress row is independent of re-inserting the word', () async {
     const wordId = 'word.animals.cat';
-    await database.into(database.words).insert(
-      WordsCompanion.insert(
-        id: wordId,
-        englishTerm: 'cat',
-        portugueseTranslation: 'gato',
-        category: 'animals',
-        difficulty: 1,
-        recommendedLevel: 1,
-        exampleSentenceEn: 'The cat sleeps.',
-        exampleSentencePt: 'O gato dorme.',
-      ),
-    );
-    await database.into(database.wordProgress).insert(
-      WordProgressCompanion.insert(wordId: wordId, masteryLevel: const Value(3)),
-    );
+    await database
+        .into(database.words)
+        .insert(
+          WordsCompanion.insert(
+            id: wordId,
+            englishTerm: 'cat',
+            portugueseTranslation: 'gato',
+            category: 'animals',
+            difficulty: 1,
+            recommendedLevel: 1,
+            exampleSentenceEn: 'The cat sleeps.',
+            exampleSentencePt: 'O gato dorme.',
+          ),
+        );
+    await database
+        .into(database.wordProgress)
+        .insert(
+          WordProgressCompanion.insert(
+            wordId: wordId,
+            masteryLevel: const Value(3),
+          ),
+        );
 
     final progress = await (database.select(
       database.wordProgress,
@@ -57,21 +66,31 @@ void main() {
     expect(progress.masteryLevel, 3);
   });
 
-  test('singleton tables (user_profile, dino_evolution_state, app_settings) accept a single row', () async {
-    await database
-        .into(database.userProfile)
-        .insertOnConflictUpdate(
-          UserProfileCompanion.insert(id: const Value(1), createdAt: DateTime(2026)),
-        );
-    await database
-        .into(database.dinoEvolutionState)
-        .insertOnConflictUpdate(DinoEvolutionStateCompanion.insert(id: const Value(1)));
-    await database
-        .into(database.appSettings)
-        .insertOnConflictUpdate(AppSettingsCompanion.insert(id: const Value(1)));
+  test(
+    'singleton tables (user_profile, dino_evolution_state, app_settings) accept a single row',
+    () async {
+      await database
+          .into(database.userProfile)
+          .insertOnConflictUpdate(
+            UserProfileCompanion.insert(
+              id: const Value(1),
+              createdAt: DateTime(2026),
+            ),
+          );
+      await database
+          .into(database.dinoEvolutionState)
+          .insertOnConflictUpdate(
+            DinoEvolutionStateCompanion.insert(id: const Value(1)),
+          );
+      await database
+          .into(database.appSettings)
+          .insertOnConflictUpdate(
+            AppSettingsCompanion.insert(id: const Value(1)),
+          );
 
-    final profile = await database.select(database.userProfile).getSingle();
-    expect(profile.totalXp, 0);
-    expect(profile.currentLevel, 1);
-  });
+      final profile = await database.select(database.userProfile).getSingle();
+      expect(profile.totalXp, 0);
+      expect(profile.currentLevel, 1);
+    },
+  );
 }

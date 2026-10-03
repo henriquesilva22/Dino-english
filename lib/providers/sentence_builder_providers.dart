@@ -150,10 +150,7 @@ class SentenceBuilderController extends Notifier<SentenceBuilderState> {
   void selectBlankOption(int tokenIndex, String option) {
     if (state.isSubmitted || state.isLoading || state.isComplete) return;
     state = state.copyWith(
-      selectedBlankAnswers: {
-        ...state.selectedBlankAnswers,
-        tokenIndex: option,
-      },
+      selectedBlankAnswers: {...state.selectedBlankAnswers, tokenIndex: option},
     );
   }
 
@@ -220,6 +217,7 @@ class SentenceBuilderController extends Notifier<SentenceBuilderState> {
 }
 
 final sentenceBuilderProvider =
-    NotifierProvider.autoDispose<SentenceBuilderController, SentenceBuilderState>(
-      SentenceBuilderController.new,
-    );
+    NotifierProvider.autoDispose<
+      SentenceBuilderController,
+      SentenceBuilderState
+    >(SentenceBuilderController.new);

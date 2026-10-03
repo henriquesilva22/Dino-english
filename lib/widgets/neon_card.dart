@@ -39,9 +39,9 @@ class NeonCard extends StatelessWidget {
     return TapScale(
       onTap: enabled
           ? onTap
-          : () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Em breve! 🚧')),
-            ),
+          : () => ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Em breve! 🚧'))),
       child: Opacity(
         opacity: enabled ? 1.0 : 0.55,
         child: NeonBorder(
@@ -66,7 +66,9 @@ class NeonCard extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: NeonColors.textSecondary.withValues(alpha: 0.2),
+                          color: NeonColors.textSecondary.withValues(
+                            alpha: 0.2,
+                          ),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(

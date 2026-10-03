@@ -59,28 +59,31 @@ void main() {
   final now = DateTime(2026, 1, 10);
   final overdueAt = DateTime(2026, 1, 1);
 
-  test('study mix respects the 40/30/20/10 target when every bucket is abundant', () {
-    final pool = [
-      ..._many(10, (id) => _newWord('new_$id')),
-      ..._many(10, (id) => _overdueWord('overdue_$id', overdueAt)),
-      ..._many(10, (id) => _weakWord('weak_$id')),
-      ..._many(10, (id) => _maintenanceWord('maint_$id', overdueAt)),
-    ];
+  test(
+    'study mix respects the 40/30/20/10 target when every bucket is abundant',
+    () {
+      final pool = [
+        ..._many(10, (id) => _newWord('new_$id')),
+        ..._many(10, (id) => _overdueWord('overdue_$id', overdueAt)),
+        ..._many(10, (id) => _weakWord('weak_$id')),
+        ..._many(10, (id) => _maintenanceWord('maint_$id', overdueAt)),
+      ];
 
-    final session = service.buildSession(
-      pool: pool,
-      kind: SessionKind.study,
-      userLevel: 5,
-      now: now,
-      count: 10,
-    );
+      final session = service.buildSession(
+        pool: pool,
+        kind: SessionKind.study,
+        userLevel: 5,
+        now: now,
+        count: 10,
+      );
 
-    expect(session, hasLength(10));
-    expect(session.where((c) => c.wordId.startsWith('new_')).length, 4);
-    expect(session.where((c) => c.wordId.startsWith('overdue_')).length, 3);
-    expect(session.where((c) => c.wordId.startsWith('weak_')).length, 2);
-    expect(session.where((c) => c.wordId.startsWith('maint_')).length, 1);
-  });
+      expect(session, hasLength(10));
+      expect(session.where((c) => c.wordId.startsWith('new_')).length, 4);
+      expect(session.where((c) => c.wordId.startsWith('overdue_')).length, 3);
+      expect(session.where((c) => c.wordId.startsWith('weak_')).length, 2);
+      expect(session.where((c) => c.wordId.startsWith('maint_')).length, 1);
+    },
+  );
 
   test('review mix never includes new words and favors overdue/weak', () {
     final pool = [
@@ -105,23 +108,30 @@ void main() {
     expect(session.where((c) => c.wordId.startsWith('maint_')).length, 2);
   });
 
-  test('backfills from overdue/weak/maintenance when there are no new words at all', () {
-    final pool = [
-      ..._many(10, (id) => _overdueWord('overdue_$id', overdueAt)),
-      ..._many(10, (id) => _weakWord('weak_$id')),
-      ..._many(10, (id) => _maintenanceWord('maint_$id', overdueAt)),
-    ];
+  test(
+    'backfills from overdue/weak/maintenance when there are no new words at all',
+    () {
+      final pool = [
+        ..._many(10, (id) => _overdueWord('overdue_$id', overdueAt)),
+        ..._many(10, (id) => _weakWord('weak_$id')),
+        ..._many(10, (id) => _maintenanceWord('maint_$id', overdueAt)),
+      ];
 
-    final session = service.buildSession(
-      pool: pool,
-      kind: SessionKind.study,
-      userLevel: 5,
-      now: now,
-      count: 10,
-    );
+      final session = service.buildSession(
+        pool: pool,
+        kind: SessionKind.study,
+        userLevel: 5,
+        now: now,
+        count: 10,
+      );
 
-    expect(session, hasLength(10), reason: 'missing new words should be backfilled, not leave gaps');
-  });
+      expect(
+        session,
+        hasLength(10),
+        reason: 'missing new words should be backfilled, not leave gaps',
+      );
+    },
+  );
 
   test(
     'fills the rest by repeating candidates (maintenance cycling) rather than returning short '
@@ -141,7 +151,10 @@ void main() {
       );
 
       expect(session, hasLength(10));
-      expect(session.map((c) => c.wordId).toSet(), {'only_overdue', 'only_weak'});
+      expect(session.map((c) => c.wordId).toSet(), {
+        'only_overdue',
+        'only_weak',
+      });
       for (var i = 1; i < session.length; i++) {
         expect(
           session[i].wordId,
@@ -191,17 +204,20 @@ void main() {
     },
   );
 
-  test('the empty pool is the only case that legitimately returns no words', () {
-    final session = service.buildSession(
-      pool: const [],
-      kind: SessionKind.study,
-      userLevel: 5,
-      now: now,
-      count: 50,
-    );
+  test(
+    'the empty pool is the only case that legitimately returns no words',
+    () {
+      final session = service.buildSession(
+        pool: const [],
+        kind: SessionKind.study,
+        userLevel: 5,
+        now: now,
+        count: 50,
+      );
 
-    expect(session, isEmpty);
-  });
+      expect(session, isEmpty);
+    },
+  );
 
   test(
     'a 10-word bank can supply 100 exercises with repetition and never returns short',

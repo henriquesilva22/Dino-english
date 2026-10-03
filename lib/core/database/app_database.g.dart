@@ -96,6 +96,17 @@ class $WordsTable extends Words with TableInfo<$WordsTable, Word> {
         type: DriftSqlType.string,
         requiredDuringInsert: true,
       );
+  static const VerificationMeta _sensesJsonMeta = const VerificationMeta(
+    'sensesJson',
+  );
+  @override
+  late final GeneratedColumn<String> sensesJson = GeneratedColumn<String>(
+    'senses_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _pronunciationAudioAssetMeta =
       const VerificationMeta('pronunciationAudioAsset');
   @override
@@ -143,6 +154,7 @@ class $WordsTable extends Words with TableInfo<$WordsTable, Word> {
     recommendedLevel,
     exampleSentenceEn,
     exampleSentencePt,
+    sensesJson,
     pronunciationAudioAsset,
     imageAsset,
     isActive,
@@ -235,6 +247,12 @@ class $WordsTable extends Words with TableInfo<$WordsTable, Word> {
     } else if (isInserting) {
       context.missing(_exampleSentencePtMeta);
     }
+    if (data.containsKey('senses_json')) {
+      context.handle(
+        _sensesJsonMeta,
+        sensesJson.isAcceptableOrUnknown(data['senses_json']!, _sensesJsonMeta),
+      );
+    }
     if (data.containsKey('pronunciation_audio_asset')) {
       context.handle(
         _pronunciationAudioAssetMeta,
@@ -297,6 +315,10 @@ class $WordsTable extends Words with TableInfo<$WordsTable, Word> {
         DriftSqlType.string,
         data['${effectivePrefix}example_sentence_pt'],
       )!,
+      sensesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}senses_json'],
+      ),
       pronunciationAudioAsset: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}pronunciation_audio_asset'],
@@ -327,6 +349,13 @@ class Word extends DataClass implements Insertable<Word> {
   final int recommendedLevel;
   final String exampleSentenceEn;
   final String exampleSentencePt;
+
+  /// Optional JSON list of every sense of the word (`light` -> luz /
+  /// leve), each `{pt, pos, example_en, example_pt}`. The first entry is
+  /// the primary sense and always matches [portugueseTranslation], which
+  /// stays the single answer quizzes grade against. Null for words with
+  /// only one sense. Added in schema v2.
+  final String? sensesJson;
   final String? pronunciationAudioAsset;
   final String? imageAsset;
   final bool isActive;
@@ -339,6 +368,7 @@ class Word extends DataClass implements Insertable<Word> {
     required this.recommendedLevel,
     required this.exampleSentenceEn,
     required this.exampleSentencePt,
+    this.sensesJson,
     this.pronunciationAudioAsset,
     this.imageAsset,
     required this.isActive,
@@ -354,6 +384,9 @@ class Word extends DataClass implements Insertable<Word> {
     map['recommended_level'] = Variable<int>(recommendedLevel);
     map['example_sentence_en'] = Variable<String>(exampleSentenceEn);
     map['example_sentence_pt'] = Variable<String>(exampleSentencePt);
+    if (!nullToAbsent || sensesJson != null) {
+      map['senses_json'] = Variable<String>(sensesJson);
+    }
     if (!nullToAbsent || pronunciationAudioAsset != null) {
       map['pronunciation_audio_asset'] = Variable<String>(
         pronunciationAudioAsset,
@@ -376,6 +409,9 @@ class Word extends DataClass implements Insertable<Word> {
       recommendedLevel: Value(recommendedLevel),
       exampleSentenceEn: Value(exampleSentenceEn),
       exampleSentencePt: Value(exampleSentencePt),
+      sensesJson: sensesJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sensesJson),
       pronunciationAudioAsset: pronunciationAudioAsset == null && nullToAbsent
           ? const Value.absent()
           : Value(pronunciationAudioAsset),
@@ -402,6 +438,7 @@ class Word extends DataClass implements Insertable<Word> {
       recommendedLevel: serializer.fromJson<int>(json['recommendedLevel']),
       exampleSentenceEn: serializer.fromJson<String>(json['exampleSentenceEn']),
       exampleSentencePt: serializer.fromJson<String>(json['exampleSentencePt']),
+      sensesJson: serializer.fromJson<String?>(json['sensesJson']),
       pronunciationAudioAsset: serializer.fromJson<String?>(
         json['pronunciationAudioAsset'],
       ),
@@ -421,6 +458,7 @@ class Word extends DataClass implements Insertable<Word> {
       'recommendedLevel': serializer.toJson<int>(recommendedLevel),
       'exampleSentenceEn': serializer.toJson<String>(exampleSentenceEn),
       'exampleSentencePt': serializer.toJson<String>(exampleSentencePt),
+      'sensesJson': serializer.toJson<String?>(sensesJson),
       'pronunciationAudioAsset': serializer.toJson<String?>(
         pronunciationAudioAsset,
       ),
@@ -438,6 +476,7 @@ class Word extends DataClass implements Insertable<Word> {
     int? recommendedLevel,
     String? exampleSentenceEn,
     String? exampleSentencePt,
+    Value<String?> sensesJson = const Value.absent(),
     Value<String?> pronunciationAudioAsset = const Value.absent(),
     Value<String?> imageAsset = const Value.absent(),
     bool? isActive,
@@ -450,6 +489,7 @@ class Word extends DataClass implements Insertable<Word> {
     recommendedLevel: recommendedLevel ?? this.recommendedLevel,
     exampleSentenceEn: exampleSentenceEn ?? this.exampleSentenceEn,
     exampleSentencePt: exampleSentencePt ?? this.exampleSentencePt,
+    sensesJson: sensesJson.present ? sensesJson.value : this.sensesJson,
     pronunciationAudioAsset: pronunciationAudioAsset.present
         ? pronunciationAudioAsset.value
         : this.pronunciationAudioAsset,
@@ -478,6 +518,9 @@ class Word extends DataClass implements Insertable<Word> {
       exampleSentencePt: data.exampleSentencePt.present
           ? data.exampleSentencePt.value
           : this.exampleSentencePt,
+      sensesJson: data.sensesJson.present
+          ? data.sensesJson.value
+          : this.sensesJson,
       pronunciationAudioAsset: data.pronunciationAudioAsset.present
           ? data.pronunciationAudioAsset.value
           : this.pronunciationAudioAsset,
@@ -499,6 +542,7 @@ class Word extends DataClass implements Insertable<Word> {
           ..write('recommendedLevel: $recommendedLevel, ')
           ..write('exampleSentenceEn: $exampleSentenceEn, ')
           ..write('exampleSentencePt: $exampleSentencePt, ')
+          ..write('sensesJson: $sensesJson, ')
           ..write('pronunciationAudioAsset: $pronunciationAudioAsset, ')
           ..write('imageAsset: $imageAsset, ')
           ..write('isActive: $isActive')
@@ -516,6 +560,7 @@ class Word extends DataClass implements Insertable<Word> {
     recommendedLevel,
     exampleSentenceEn,
     exampleSentencePt,
+    sensesJson,
     pronunciationAudioAsset,
     imageAsset,
     isActive,
@@ -532,6 +577,7 @@ class Word extends DataClass implements Insertable<Word> {
           other.recommendedLevel == this.recommendedLevel &&
           other.exampleSentenceEn == this.exampleSentenceEn &&
           other.exampleSentencePt == this.exampleSentencePt &&
+          other.sensesJson == this.sensesJson &&
           other.pronunciationAudioAsset == this.pronunciationAudioAsset &&
           other.imageAsset == this.imageAsset &&
           other.isActive == this.isActive);
@@ -546,6 +592,7 @@ class WordsCompanion extends UpdateCompanion<Word> {
   final Value<int> recommendedLevel;
   final Value<String> exampleSentenceEn;
   final Value<String> exampleSentencePt;
+  final Value<String?> sensesJson;
   final Value<String?> pronunciationAudioAsset;
   final Value<String?> imageAsset;
   final Value<bool> isActive;
@@ -559,6 +606,7 @@ class WordsCompanion extends UpdateCompanion<Word> {
     this.recommendedLevel = const Value.absent(),
     this.exampleSentenceEn = const Value.absent(),
     this.exampleSentencePt = const Value.absent(),
+    this.sensesJson = const Value.absent(),
     this.pronunciationAudioAsset = const Value.absent(),
     this.imageAsset = const Value.absent(),
     this.isActive = const Value.absent(),
@@ -573,6 +621,7 @@ class WordsCompanion extends UpdateCompanion<Word> {
     required int recommendedLevel,
     required String exampleSentenceEn,
     required String exampleSentencePt,
+    this.sensesJson = const Value.absent(),
     this.pronunciationAudioAsset = const Value.absent(),
     this.imageAsset = const Value.absent(),
     this.isActive = const Value.absent(),
@@ -594,6 +643,7 @@ class WordsCompanion extends UpdateCompanion<Word> {
     Expression<int>? recommendedLevel,
     Expression<String>? exampleSentenceEn,
     Expression<String>? exampleSentencePt,
+    Expression<String>? sensesJson,
     Expression<String>? pronunciationAudioAsset,
     Expression<String>? imageAsset,
     Expression<bool>? isActive,
@@ -609,6 +659,7 @@ class WordsCompanion extends UpdateCompanion<Word> {
       if (recommendedLevel != null) 'recommended_level': recommendedLevel,
       if (exampleSentenceEn != null) 'example_sentence_en': exampleSentenceEn,
       if (exampleSentencePt != null) 'example_sentence_pt': exampleSentencePt,
+      if (sensesJson != null) 'senses_json': sensesJson,
       if (pronunciationAudioAsset != null)
         'pronunciation_audio_asset': pronunciationAudioAsset,
       if (imageAsset != null) 'image_asset': imageAsset,
@@ -626,6 +677,7 @@ class WordsCompanion extends UpdateCompanion<Word> {
     Value<int>? recommendedLevel,
     Value<String>? exampleSentenceEn,
     Value<String>? exampleSentencePt,
+    Value<String?>? sensesJson,
     Value<String?>? pronunciationAudioAsset,
     Value<String?>? imageAsset,
     Value<bool>? isActive,
@@ -641,6 +693,7 @@ class WordsCompanion extends UpdateCompanion<Word> {
       recommendedLevel: recommendedLevel ?? this.recommendedLevel,
       exampleSentenceEn: exampleSentenceEn ?? this.exampleSentenceEn,
       exampleSentencePt: exampleSentencePt ?? this.exampleSentencePt,
+      sensesJson: sensesJson ?? this.sensesJson,
       pronunciationAudioAsset:
           pronunciationAudioAsset ?? this.pronunciationAudioAsset,
       imageAsset: imageAsset ?? this.imageAsset,
@@ -678,6 +731,9 @@ class WordsCompanion extends UpdateCompanion<Word> {
     if (exampleSentencePt.present) {
       map['example_sentence_pt'] = Variable<String>(exampleSentencePt.value);
     }
+    if (sensesJson.present) {
+      map['senses_json'] = Variable<String>(sensesJson.value);
+    }
     if (pronunciationAudioAsset.present) {
       map['pronunciation_audio_asset'] = Variable<String>(
         pronunciationAudioAsset.value,
@@ -706,6 +762,7 @@ class WordsCompanion extends UpdateCompanion<Word> {
           ..write('recommendedLevel: $recommendedLevel, ')
           ..write('exampleSentenceEn: $exampleSentenceEn, ')
           ..write('exampleSentencePt: $exampleSentencePt, ')
+          ..write('sensesJson: $sensesJson, ')
           ..write('pronunciationAudioAsset: $pronunciationAudioAsset, ')
           ..write('imageAsset: $imageAsset, ')
           ..write('isActive: $isActive, ')
@@ -3857,6 +3914,1035 @@ class SeedMetadataCompanion extends UpdateCompanion<SeedMetadataRow> {
   }
 }
 
+class $DinoMemoriesTable extends DinoMemories
+    with TableInfo<$DinoMemoriesTable, DinoMemoryRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DinoMemoriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _memoryKeyMeta = const VerificationMeta(
+    'memoryKey',
+  );
+  @override
+  late final GeneratedColumn<String> memoryKey = GeneratedColumn<String>(
+    'memory_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+    'value',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _confidenceMeta = const VerificationMeta(
+    'confidence',
+  );
+  @override
+  late final GeneratedColumn<double> confidence = GeneratedColumn<double>(
+    'confidence',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
+  static const VerificationMeta _timesReinforcedMeta = const VerificationMeta(
+    'timesReinforced',
+  );
+  @override
+  late final GeneratedColumn<int> timesReinforced = GeneratedColumn<int>(
+    'times_reinforced',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    kind,
+    memoryKey,
+    value,
+    confidence,
+    timesReinforced,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'dino_memories';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DinoMemoryRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('memory_key')) {
+      context.handle(
+        _memoryKeyMeta,
+        memoryKey.isAcceptableOrUnknown(data['memory_key']!, _memoryKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_memoryKeyMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+        _valueMeta,
+        value.isAcceptableOrUnknown(data['value']!, _valueMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    if (data.containsKey('confidence')) {
+      context.handle(
+        _confidenceMeta,
+        confidence.isAcceptableOrUnknown(data['confidence']!, _confidenceMeta),
+      );
+    }
+    if (data.containsKey('times_reinforced')) {
+      context.handle(
+        _timesReinforcedMeta,
+        timesReinforced.isAcceptableOrUnknown(
+          data['times_reinforced']!,
+          _timesReinforcedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {kind, memoryKey};
+  @override
+  DinoMemoryRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DinoMemoryRow(
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      memoryKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}memory_key'],
+      )!,
+      value: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}value'],
+      )!,
+      confidence: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}confidence'],
+      )!,
+      timesReinforced: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}times_reinforced'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $DinoMemoriesTable createAlias(String alias) {
+    return $DinoMemoriesTable(attachedDatabase, alias);
+  }
+}
+
+class DinoMemoryRow extends DataClass implements Insertable<DinoMemoryRow> {
+  final String kind;
+
+  /// Kind-specific key, e.g. `food` for a `preference`, a word id for a
+  /// `learnedWord`.
+  final String memoryKey;
+  final String value;
+
+  /// 0..1 -- how sure the Dino is (e.g. a learned word's mastery in
+  /// conversation, or a word a child taught that isn't in the bank).
+  final double confidence;
+  final int timesReinforced;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const DinoMemoryRow({
+    required this.kind,
+    required this.memoryKey,
+    required this.value,
+    required this.confidence,
+    required this.timesReinforced,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['kind'] = Variable<String>(kind);
+    map['memory_key'] = Variable<String>(memoryKey);
+    map['value'] = Variable<String>(value);
+    map['confidence'] = Variable<double>(confidence);
+    map['times_reinforced'] = Variable<int>(timesReinforced);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  DinoMemoriesCompanion toCompanion(bool nullToAbsent) {
+    return DinoMemoriesCompanion(
+      kind: Value(kind),
+      memoryKey: Value(memoryKey),
+      value: Value(value),
+      confidence: Value(confidence),
+      timesReinforced: Value(timesReinforced),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory DinoMemoryRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DinoMemoryRow(
+      kind: serializer.fromJson<String>(json['kind']),
+      memoryKey: serializer.fromJson<String>(json['memoryKey']),
+      value: serializer.fromJson<String>(json['value']),
+      confidence: serializer.fromJson<double>(json['confidence']),
+      timesReinforced: serializer.fromJson<int>(json['timesReinforced']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'kind': serializer.toJson<String>(kind),
+      'memoryKey': serializer.toJson<String>(memoryKey),
+      'value': serializer.toJson<String>(value),
+      'confidence': serializer.toJson<double>(confidence),
+      'timesReinforced': serializer.toJson<int>(timesReinforced),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  DinoMemoryRow copyWith({
+    String? kind,
+    String? memoryKey,
+    String? value,
+    double? confidence,
+    int? timesReinforced,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => DinoMemoryRow(
+    kind: kind ?? this.kind,
+    memoryKey: memoryKey ?? this.memoryKey,
+    value: value ?? this.value,
+    confidence: confidence ?? this.confidence,
+    timesReinforced: timesReinforced ?? this.timesReinforced,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  DinoMemoryRow copyWithCompanion(DinoMemoriesCompanion data) {
+    return DinoMemoryRow(
+      kind: data.kind.present ? data.kind.value : this.kind,
+      memoryKey: data.memoryKey.present ? data.memoryKey.value : this.memoryKey,
+      value: data.value.present ? data.value.value : this.value,
+      confidence: data.confidence.present
+          ? data.confidence.value
+          : this.confidence,
+      timesReinforced: data.timesReinforced.present
+          ? data.timesReinforced.value
+          : this.timesReinforced,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DinoMemoryRow(')
+          ..write('kind: $kind, ')
+          ..write('memoryKey: $memoryKey, ')
+          ..write('value: $value, ')
+          ..write('confidence: $confidence, ')
+          ..write('timesReinforced: $timesReinforced, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    kind,
+    memoryKey,
+    value,
+    confidence,
+    timesReinforced,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DinoMemoryRow &&
+          other.kind == this.kind &&
+          other.memoryKey == this.memoryKey &&
+          other.value == this.value &&
+          other.confidence == this.confidence &&
+          other.timesReinforced == this.timesReinforced &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class DinoMemoriesCompanion extends UpdateCompanion<DinoMemoryRow> {
+  final Value<String> kind;
+  final Value<String> memoryKey;
+  final Value<String> value;
+  final Value<double> confidence;
+  final Value<int> timesReinforced;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const DinoMemoriesCompanion({
+    this.kind = const Value.absent(),
+    this.memoryKey = const Value.absent(),
+    this.value = const Value.absent(),
+    this.confidence = const Value.absent(),
+    this.timesReinforced = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DinoMemoriesCompanion.insert({
+    required String kind,
+    required String memoryKey,
+    required String value,
+    this.confidence = const Value.absent(),
+    this.timesReinforced = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : kind = Value(kind),
+       memoryKey = Value(memoryKey),
+       value = Value(value),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<DinoMemoryRow> custom({
+    Expression<String>? kind,
+    Expression<String>? memoryKey,
+    Expression<String>? value,
+    Expression<double>? confidence,
+    Expression<int>? timesReinforced,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (kind != null) 'kind': kind,
+      if (memoryKey != null) 'memory_key': memoryKey,
+      if (value != null) 'value': value,
+      if (confidence != null) 'confidence': confidence,
+      if (timesReinforced != null) 'times_reinforced': timesReinforced,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DinoMemoriesCompanion copyWith({
+    Value<String>? kind,
+    Value<String>? memoryKey,
+    Value<String>? value,
+    Value<double>? confidence,
+    Value<int>? timesReinforced,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return DinoMemoriesCompanion(
+      kind: kind ?? this.kind,
+      memoryKey: memoryKey ?? this.memoryKey,
+      value: value ?? this.value,
+      confidence: confidence ?? this.confidence,
+      timesReinforced: timesReinforced ?? this.timesReinforced,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (memoryKey.present) {
+      map['memory_key'] = Variable<String>(memoryKey.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
+    }
+    if (confidence.present) {
+      map['confidence'] = Variable<double>(confidence.value);
+    }
+    if (timesReinforced.present) {
+      map['times_reinforced'] = Variable<int>(timesReinforced.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DinoMemoriesCompanion(')
+          ..write('kind: $kind, ')
+          ..write('memoryKey: $memoryKey, ')
+          ..write('value: $value, ')
+          ..write('confidence: $confidence, ')
+          ..write('timesReinforced: $timesReinforced, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CompanionStatesTable extends CompanionStates
+    with TableInfo<$CompanionStatesTable, CompanionStateRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CompanionStatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _hungerMeta = const VerificationMeta('hunger');
+  @override
+  late final GeneratedColumn<double> hunger = GeneratedColumn<double>(
+    'hunger',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _thirstMeta = const VerificationMeta('thirst');
+  @override
+  late final GeneratedColumn<double> thirst = GeneratedColumn<double>(
+    'thirst',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _energyMeta = const VerificationMeta('energy');
+  @override
+  late final GeneratedColumn<double> energy = GeneratedColumn<double>(
+    'energy',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _happinessMeta = const VerificationMeta(
+    'happiness',
+  );
+  @override
+  late final GeneratedColumn<double> happiness = GeneratedColumn<double>(
+    'happiness',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isSleepingMeta = const VerificationMeta(
+    'isSleeping',
+  );
+  @override
+  late final GeneratedColumn<bool> isSleeping = GeneratedColumn<bool>(
+    'is_sleeping',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_sleeping" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _careXpTodayMeta = const VerificationMeta(
+    'careXpToday',
+  );
+  @override
+  late final GeneratedColumn<int> careXpToday = GeneratedColumn<int>(
+    'care_xp_today',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _careXpDateMeta = const VerificationMeta(
+    'careXpDate',
+  );
+  @override
+  late final GeneratedColumn<String> careXpDate = GeneratedColumn<String>(
+    'care_xp_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    hunger,
+    thirst,
+    energy,
+    happiness,
+    isSleeping,
+    careXpToday,
+    careXpDate,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'companion_state';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CompanionStateRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('hunger')) {
+      context.handle(
+        _hungerMeta,
+        hunger.isAcceptableOrUnknown(data['hunger']!, _hungerMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_hungerMeta);
+    }
+    if (data.containsKey('thirst')) {
+      context.handle(
+        _thirstMeta,
+        thirst.isAcceptableOrUnknown(data['thirst']!, _thirstMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_thirstMeta);
+    }
+    if (data.containsKey('energy')) {
+      context.handle(
+        _energyMeta,
+        energy.isAcceptableOrUnknown(data['energy']!, _energyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_energyMeta);
+    }
+    if (data.containsKey('happiness')) {
+      context.handle(
+        _happinessMeta,
+        happiness.isAcceptableOrUnknown(data['happiness']!, _happinessMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_happinessMeta);
+    }
+    if (data.containsKey('is_sleeping')) {
+      context.handle(
+        _isSleepingMeta,
+        isSleeping.isAcceptableOrUnknown(data['is_sleeping']!, _isSleepingMeta),
+      );
+    }
+    if (data.containsKey('care_xp_today')) {
+      context.handle(
+        _careXpTodayMeta,
+        careXpToday.isAcceptableOrUnknown(
+          data['care_xp_today']!,
+          _careXpTodayMeta,
+        ),
+      );
+    }
+    if (data.containsKey('care_xp_date')) {
+      context.handle(
+        _careXpDateMeta,
+        careXpDate.isAcceptableOrUnknown(
+          data['care_xp_date']!,
+          _careXpDateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CompanionStateRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CompanionStateRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      hunger: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}hunger'],
+      )!,
+      thirst: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}thirst'],
+      )!,
+      energy: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}energy'],
+      )!,
+      happiness: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}happiness'],
+      )!,
+      isSleeping: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_sleeping'],
+      )!,
+      careXpToday: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}care_xp_today'],
+      )!,
+      careXpDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}care_xp_date'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CompanionStatesTable createAlias(String alias) {
+    return $CompanionStatesTable(attachedDatabase, alias);
+  }
+}
+
+class CompanionStateRow extends DataClass
+    implements Insertable<CompanionStateRow> {
+  final int id;
+  final double hunger;
+  final double thirst;
+  final double energy;
+  final double happiness;
+  final bool isSleeping;
+
+  /// Care XP granted on [careXpDate] (`YYYY-MM-DD`), for the daily cap.
+  final int careXpToday;
+  final String? careXpDate;
+  final DateTime updatedAt;
+  const CompanionStateRow({
+    required this.id,
+    required this.hunger,
+    required this.thirst,
+    required this.energy,
+    required this.happiness,
+    required this.isSleeping,
+    required this.careXpToday,
+    this.careXpDate,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['hunger'] = Variable<double>(hunger);
+    map['thirst'] = Variable<double>(thirst);
+    map['energy'] = Variable<double>(energy);
+    map['happiness'] = Variable<double>(happiness);
+    map['is_sleeping'] = Variable<bool>(isSleeping);
+    map['care_xp_today'] = Variable<int>(careXpToday);
+    if (!nullToAbsent || careXpDate != null) {
+      map['care_xp_date'] = Variable<String>(careXpDate);
+    }
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  CompanionStatesCompanion toCompanion(bool nullToAbsent) {
+    return CompanionStatesCompanion(
+      id: Value(id),
+      hunger: Value(hunger),
+      thirst: Value(thirst),
+      energy: Value(energy),
+      happiness: Value(happiness),
+      isSleeping: Value(isSleeping),
+      careXpToday: Value(careXpToday),
+      careXpDate: careXpDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(careXpDate),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory CompanionStateRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CompanionStateRow(
+      id: serializer.fromJson<int>(json['id']),
+      hunger: serializer.fromJson<double>(json['hunger']),
+      thirst: serializer.fromJson<double>(json['thirst']),
+      energy: serializer.fromJson<double>(json['energy']),
+      happiness: serializer.fromJson<double>(json['happiness']),
+      isSleeping: serializer.fromJson<bool>(json['isSleeping']),
+      careXpToday: serializer.fromJson<int>(json['careXpToday']),
+      careXpDate: serializer.fromJson<String?>(json['careXpDate']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'hunger': serializer.toJson<double>(hunger),
+      'thirst': serializer.toJson<double>(thirst),
+      'energy': serializer.toJson<double>(energy),
+      'happiness': serializer.toJson<double>(happiness),
+      'isSleeping': serializer.toJson<bool>(isSleeping),
+      'careXpToday': serializer.toJson<int>(careXpToday),
+      'careXpDate': serializer.toJson<String?>(careXpDate),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  CompanionStateRow copyWith({
+    int? id,
+    double? hunger,
+    double? thirst,
+    double? energy,
+    double? happiness,
+    bool? isSleeping,
+    int? careXpToday,
+    Value<String?> careXpDate = const Value.absent(),
+    DateTime? updatedAt,
+  }) => CompanionStateRow(
+    id: id ?? this.id,
+    hunger: hunger ?? this.hunger,
+    thirst: thirst ?? this.thirst,
+    energy: energy ?? this.energy,
+    happiness: happiness ?? this.happiness,
+    isSleeping: isSleeping ?? this.isSleeping,
+    careXpToday: careXpToday ?? this.careXpToday,
+    careXpDate: careXpDate.present ? careXpDate.value : this.careXpDate,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  CompanionStateRow copyWithCompanion(CompanionStatesCompanion data) {
+    return CompanionStateRow(
+      id: data.id.present ? data.id.value : this.id,
+      hunger: data.hunger.present ? data.hunger.value : this.hunger,
+      thirst: data.thirst.present ? data.thirst.value : this.thirst,
+      energy: data.energy.present ? data.energy.value : this.energy,
+      happiness: data.happiness.present ? data.happiness.value : this.happiness,
+      isSleeping: data.isSleeping.present
+          ? data.isSleeping.value
+          : this.isSleeping,
+      careXpToday: data.careXpToday.present
+          ? data.careXpToday.value
+          : this.careXpToday,
+      careXpDate: data.careXpDate.present
+          ? data.careXpDate.value
+          : this.careXpDate,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CompanionStateRow(')
+          ..write('id: $id, ')
+          ..write('hunger: $hunger, ')
+          ..write('thirst: $thirst, ')
+          ..write('energy: $energy, ')
+          ..write('happiness: $happiness, ')
+          ..write('isSleeping: $isSleeping, ')
+          ..write('careXpToday: $careXpToday, ')
+          ..write('careXpDate: $careXpDate, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    hunger,
+    thirst,
+    energy,
+    happiness,
+    isSleeping,
+    careXpToday,
+    careXpDate,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CompanionStateRow &&
+          other.id == this.id &&
+          other.hunger == this.hunger &&
+          other.thirst == this.thirst &&
+          other.energy == this.energy &&
+          other.happiness == this.happiness &&
+          other.isSleeping == this.isSleeping &&
+          other.careXpToday == this.careXpToday &&
+          other.careXpDate == this.careXpDate &&
+          other.updatedAt == this.updatedAt);
+}
+
+class CompanionStatesCompanion extends UpdateCompanion<CompanionStateRow> {
+  final Value<int> id;
+  final Value<double> hunger;
+  final Value<double> thirst;
+  final Value<double> energy;
+  final Value<double> happiness;
+  final Value<bool> isSleeping;
+  final Value<int> careXpToday;
+  final Value<String?> careXpDate;
+  final Value<DateTime> updatedAt;
+  const CompanionStatesCompanion({
+    this.id = const Value.absent(),
+    this.hunger = const Value.absent(),
+    this.thirst = const Value.absent(),
+    this.energy = const Value.absent(),
+    this.happiness = const Value.absent(),
+    this.isSleeping = const Value.absent(),
+    this.careXpToday = const Value.absent(),
+    this.careXpDate = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  CompanionStatesCompanion.insert({
+    this.id = const Value.absent(),
+    required double hunger,
+    required double thirst,
+    required double energy,
+    required double happiness,
+    this.isSleeping = const Value.absent(),
+    this.careXpToday = const Value.absent(),
+    this.careXpDate = const Value.absent(),
+    required DateTime updatedAt,
+  }) : hunger = Value(hunger),
+       thirst = Value(thirst),
+       energy = Value(energy),
+       happiness = Value(happiness),
+       updatedAt = Value(updatedAt);
+  static Insertable<CompanionStateRow> custom({
+    Expression<int>? id,
+    Expression<double>? hunger,
+    Expression<double>? thirst,
+    Expression<double>? energy,
+    Expression<double>? happiness,
+    Expression<bool>? isSleeping,
+    Expression<int>? careXpToday,
+    Expression<String>? careXpDate,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (hunger != null) 'hunger': hunger,
+      if (thirst != null) 'thirst': thirst,
+      if (energy != null) 'energy': energy,
+      if (happiness != null) 'happiness': happiness,
+      if (isSleeping != null) 'is_sleeping': isSleeping,
+      if (careXpToday != null) 'care_xp_today': careXpToday,
+      if (careXpDate != null) 'care_xp_date': careXpDate,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  CompanionStatesCompanion copyWith({
+    Value<int>? id,
+    Value<double>? hunger,
+    Value<double>? thirst,
+    Value<double>? energy,
+    Value<double>? happiness,
+    Value<bool>? isSleeping,
+    Value<int>? careXpToday,
+    Value<String?>? careXpDate,
+    Value<DateTime>? updatedAt,
+  }) {
+    return CompanionStatesCompanion(
+      id: id ?? this.id,
+      hunger: hunger ?? this.hunger,
+      thirst: thirst ?? this.thirst,
+      energy: energy ?? this.energy,
+      happiness: happiness ?? this.happiness,
+      isSleeping: isSleeping ?? this.isSleeping,
+      careXpToday: careXpToday ?? this.careXpToday,
+      careXpDate: careXpDate ?? this.careXpDate,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (hunger.present) {
+      map['hunger'] = Variable<double>(hunger.value);
+    }
+    if (thirst.present) {
+      map['thirst'] = Variable<double>(thirst.value);
+    }
+    if (energy.present) {
+      map['energy'] = Variable<double>(energy.value);
+    }
+    if (happiness.present) {
+      map['happiness'] = Variable<double>(happiness.value);
+    }
+    if (isSleeping.present) {
+      map['is_sleeping'] = Variable<bool>(isSleeping.value);
+    }
+    if (careXpToday.present) {
+      map['care_xp_today'] = Variable<int>(careXpToday.value);
+    }
+    if (careXpDate.present) {
+      map['care_xp_date'] = Variable<String>(careXpDate.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CompanionStatesCompanion(')
+          ..write('id: $id, ')
+          ..write('hunger: $hunger, ')
+          ..write('thirst: $thirst, ')
+          ..write('energy: $energy, ')
+          ..write('happiness: $happiness, ')
+          ..write('isSleeping: $isSleeping, ')
+          ..write('careXpToday: $careXpToday, ')
+          ..write('careXpDate: $careXpDate, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3873,6 +4959,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $DinoEvolutionStateTable(this);
   late final $AppSettingsTable appSettings = $AppSettingsTable(this);
   late final $SeedMetadataTable seedMetadata = $SeedMetadataTable(this);
+  late final $DinoMemoriesTable dinoMemories = $DinoMemoriesTable(this);
+  late final $CompanionStatesTable companionStates = $CompanionStatesTable(
+    this,
+  );
   late final Index idxExerciseAttemptsWordId = Index(
     'idx_exercise_attempts_word_id',
     'CREATE INDEX idx_exercise_attempts_word_id ON exercise_attempts (word_id)',
@@ -3894,6 +4984,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     dinoEvolutionState,
     appSettings,
     seedMetadata,
+    dinoMemories,
+    companionStates,
     idxExerciseAttemptsWordId,
     idxExerciseAttemptsAttemptedAt,
   ];
@@ -3909,6 +5001,7 @@ typedef $$WordsTableCreateCompanionBuilder =
       required int recommendedLevel,
       required String exampleSentenceEn,
       required String exampleSentencePt,
+      Value<String?> sensesJson,
       Value<String?> pronunciationAudioAsset,
       Value<String?> imageAsset,
       Value<bool> isActive,
@@ -3924,6 +5017,7 @@ typedef $$WordsTableUpdateCompanionBuilder =
       Value<int> recommendedLevel,
       Value<String> exampleSentenceEn,
       Value<String> exampleSentencePt,
+      Value<String?> sensesJson,
       Value<String?> pronunciationAudioAsset,
       Value<String?> imageAsset,
       Value<bool> isActive,
@@ -4018,6 +5112,11 @@ class $$WordsTableFilterComposer extends Composer<_$AppDatabase, $WordsTable> {
 
   ColumnFilters<String> get exampleSentencePt => $composableBuilder(
     column: $table.exampleSentencePt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sensesJson => $composableBuilder(
+    column: $table.sensesJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4136,6 +5235,11 @@ class $$WordsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get sensesJson => $composableBuilder(
+    column: $table.sensesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get pronunciationAudioAsset => $composableBuilder(
     column: $table.pronunciationAudioAsset,
     builder: (column) => ColumnOrderings(column),
@@ -4194,6 +5298,11 @@ class $$WordsTableAnnotationComposer
 
   GeneratedColumn<String> get exampleSentencePt => $composableBuilder(
     column: $table.exampleSentencePt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sensesJson => $composableBuilder(
+    column: $table.sensesJson,
     builder: (column) => column,
   );
 
@@ -4300,6 +5409,7 @@ class $$WordsTableTableManager
                 Value<int> recommendedLevel = const Value.absent(),
                 Value<String> exampleSentenceEn = const Value.absent(),
                 Value<String> exampleSentencePt = const Value.absent(),
+                Value<String?> sensesJson = const Value.absent(),
                 Value<String?> pronunciationAudioAsset = const Value.absent(),
                 Value<String?> imageAsset = const Value.absent(),
                 Value<bool> isActive = const Value.absent(),
@@ -4313,6 +5423,7 @@ class $$WordsTableTableManager
                 recommendedLevel: recommendedLevel,
                 exampleSentenceEn: exampleSentenceEn,
                 exampleSentencePt: exampleSentencePt,
+                sensesJson: sensesJson,
                 pronunciationAudioAsset: pronunciationAudioAsset,
                 imageAsset: imageAsset,
                 isActive: isActive,
@@ -4328,6 +5439,7 @@ class $$WordsTableTableManager
                 required int recommendedLevel,
                 required String exampleSentenceEn,
                 required String exampleSentencePt,
+                Value<String?> sensesJson = const Value.absent(),
                 Value<String?> pronunciationAudioAsset = const Value.absent(),
                 Value<String?> imageAsset = const Value.absent(),
                 Value<bool> isActive = const Value.absent(),
@@ -4341,6 +5453,7 @@ class $$WordsTableTableManager
                 recommendedLevel: recommendedLevel,
                 exampleSentenceEn: exampleSentenceEn,
                 exampleSentencePt: exampleSentencePt,
+                sensesJson: sensesJson,
                 pronunciationAudioAsset: pronunciationAudioAsset,
                 imageAsset: imageAsset,
                 isActive: isActive,
@@ -6311,6 +7424,530 @@ typedef $$SeedMetadataTableProcessedTableManager =
       SeedMetadataRow,
       PrefetchHooks Function()
     >;
+typedef $$DinoMemoriesTableCreateCompanionBuilder =
+    DinoMemoriesCompanion Function({
+      required String kind,
+      required String memoryKey,
+      required String value,
+      Value<double> confidence,
+      Value<int> timesReinforced,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$DinoMemoriesTableUpdateCompanionBuilder =
+    DinoMemoriesCompanion Function({
+      Value<String> kind,
+      Value<String> memoryKey,
+      Value<String> value,
+      Value<double> confidence,
+      Value<int> timesReinforced,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$DinoMemoriesTableFilterComposer
+    extends Composer<_$AppDatabase, $DinoMemoriesTable> {
+  $$DinoMemoriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get memoryKey => $composableBuilder(
+    column: $table.memoryKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get timesReinforced => $composableBuilder(
+    column: $table.timesReinforced,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DinoMemoriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $DinoMemoriesTable> {
+  $$DinoMemoriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get memoryKey => $composableBuilder(
+    column: $table.memoryKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get timesReinforced => $composableBuilder(
+    column: $table.timesReinforced,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DinoMemoriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DinoMemoriesTable> {
+  $$DinoMemoriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get memoryKey =>
+      $composableBuilder(column: $table.memoryKey, builder: (column) => column);
+
+  GeneratedColumn<String> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+
+  GeneratedColumn<double> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get timesReinforced => $composableBuilder(
+    column: $table.timesReinforced,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$DinoMemoriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DinoMemoriesTable,
+          DinoMemoryRow,
+          $$DinoMemoriesTableFilterComposer,
+          $$DinoMemoriesTableOrderingComposer,
+          $$DinoMemoriesTableAnnotationComposer,
+          $$DinoMemoriesTableCreateCompanionBuilder,
+          $$DinoMemoriesTableUpdateCompanionBuilder,
+          (
+            DinoMemoryRow,
+            BaseReferences<_$AppDatabase, $DinoMemoriesTable, DinoMemoryRow>,
+          ),
+          DinoMemoryRow,
+          PrefetchHooks Function()
+        > {
+  $$DinoMemoriesTableTableManager(_$AppDatabase db, $DinoMemoriesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DinoMemoriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DinoMemoriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DinoMemoriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> kind = const Value.absent(),
+                Value<String> memoryKey = const Value.absent(),
+                Value<String> value = const Value.absent(),
+                Value<double> confidence = const Value.absent(),
+                Value<int> timesReinforced = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DinoMemoriesCompanion(
+                kind: kind,
+                memoryKey: memoryKey,
+                value: value,
+                confidence: confidence,
+                timesReinforced: timesReinforced,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String kind,
+                required String memoryKey,
+                required String value,
+                Value<double> confidence = const Value.absent(),
+                Value<int> timesReinforced = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => DinoMemoriesCompanion.insert(
+                kind: kind,
+                memoryKey: memoryKey,
+                value: value,
+                confidence: confidence,
+                timesReinforced: timesReinforced,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DinoMemoriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DinoMemoriesTable,
+      DinoMemoryRow,
+      $$DinoMemoriesTableFilterComposer,
+      $$DinoMemoriesTableOrderingComposer,
+      $$DinoMemoriesTableAnnotationComposer,
+      $$DinoMemoriesTableCreateCompanionBuilder,
+      $$DinoMemoriesTableUpdateCompanionBuilder,
+      (
+        DinoMemoryRow,
+        BaseReferences<_$AppDatabase, $DinoMemoriesTable, DinoMemoryRow>,
+      ),
+      DinoMemoryRow,
+      PrefetchHooks Function()
+    >;
+typedef $$CompanionStatesTableCreateCompanionBuilder =
+    CompanionStatesCompanion Function({
+      Value<int> id,
+      required double hunger,
+      required double thirst,
+      required double energy,
+      required double happiness,
+      Value<bool> isSleeping,
+      Value<int> careXpToday,
+      Value<String?> careXpDate,
+      required DateTime updatedAt,
+    });
+typedef $$CompanionStatesTableUpdateCompanionBuilder =
+    CompanionStatesCompanion Function({
+      Value<int> id,
+      Value<double> hunger,
+      Value<double> thirst,
+      Value<double> energy,
+      Value<double> happiness,
+      Value<bool> isSleeping,
+      Value<int> careXpToday,
+      Value<String?> careXpDate,
+      Value<DateTime> updatedAt,
+    });
+
+class $$CompanionStatesTableFilterComposer
+    extends Composer<_$AppDatabase, $CompanionStatesTable> {
+  $$CompanionStatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get hunger => $composableBuilder(
+    column: $table.hunger,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get thirst => $composableBuilder(
+    column: $table.thirst,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get energy => $composableBuilder(
+    column: $table.energy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get happiness => $composableBuilder(
+    column: $table.happiness,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isSleeping => $composableBuilder(
+    column: $table.isSleeping,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get careXpToday => $composableBuilder(
+    column: $table.careXpToday,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get careXpDate => $composableBuilder(
+    column: $table.careXpDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CompanionStatesTableOrderingComposer
+    extends Composer<_$AppDatabase, $CompanionStatesTable> {
+  $$CompanionStatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get hunger => $composableBuilder(
+    column: $table.hunger,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get thirst => $composableBuilder(
+    column: $table.thirst,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get energy => $composableBuilder(
+    column: $table.energy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get happiness => $composableBuilder(
+    column: $table.happiness,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isSleeping => $composableBuilder(
+    column: $table.isSleeping,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get careXpToday => $composableBuilder(
+    column: $table.careXpToday,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get careXpDate => $composableBuilder(
+    column: $table.careXpDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CompanionStatesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CompanionStatesTable> {
+  $$CompanionStatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<double> get hunger =>
+      $composableBuilder(column: $table.hunger, builder: (column) => column);
+
+  GeneratedColumn<double> get thirst =>
+      $composableBuilder(column: $table.thirst, builder: (column) => column);
+
+  GeneratedColumn<double> get energy =>
+      $composableBuilder(column: $table.energy, builder: (column) => column);
+
+  GeneratedColumn<double> get happiness =>
+      $composableBuilder(column: $table.happiness, builder: (column) => column);
+
+  GeneratedColumn<bool> get isSleeping => $composableBuilder(
+    column: $table.isSleeping,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get careXpToday => $composableBuilder(
+    column: $table.careXpToday,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get careXpDate => $composableBuilder(
+    column: $table.careXpDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$CompanionStatesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CompanionStatesTable,
+          CompanionStateRow,
+          $$CompanionStatesTableFilterComposer,
+          $$CompanionStatesTableOrderingComposer,
+          $$CompanionStatesTableAnnotationComposer,
+          $$CompanionStatesTableCreateCompanionBuilder,
+          $$CompanionStatesTableUpdateCompanionBuilder,
+          (
+            CompanionStateRow,
+            BaseReferences<
+              _$AppDatabase,
+              $CompanionStatesTable,
+              CompanionStateRow
+            >,
+          ),
+          CompanionStateRow,
+          PrefetchHooks Function()
+        > {
+  $$CompanionStatesTableTableManager(
+    _$AppDatabase db,
+    $CompanionStatesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CompanionStatesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CompanionStatesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CompanionStatesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<double> hunger = const Value.absent(),
+                Value<double> thirst = const Value.absent(),
+                Value<double> energy = const Value.absent(),
+                Value<double> happiness = const Value.absent(),
+                Value<bool> isSleeping = const Value.absent(),
+                Value<int> careXpToday = const Value.absent(),
+                Value<String?> careXpDate = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => CompanionStatesCompanion(
+                id: id,
+                hunger: hunger,
+                thirst: thirst,
+                energy: energy,
+                happiness: happiness,
+                isSleeping: isSleeping,
+                careXpToday: careXpToday,
+                careXpDate: careXpDate,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required double hunger,
+                required double thirst,
+                required double energy,
+                required double happiness,
+                Value<bool> isSleeping = const Value.absent(),
+                Value<int> careXpToday = const Value.absent(),
+                Value<String?> careXpDate = const Value.absent(),
+                required DateTime updatedAt,
+              }) => CompanionStatesCompanion.insert(
+                id: id,
+                hunger: hunger,
+                thirst: thirst,
+                energy: energy,
+                happiness: happiness,
+                isSleeping: isSleeping,
+                careXpToday: careXpToday,
+                careXpDate: careXpDate,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CompanionStatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CompanionStatesTable,
+      CompanionStateRow,
+      $$CompanionStatesTableFilterComposer,
+      $$CompanionStatesTableOrderingComposer,
+      $$CompanionStatesTableAnnotationComposer,
+      $$CompanionStatesTableCreateCompanionBuilder,
+      $$CompanionStatesTableUpdateCompanionBuilder,
+      (
+        CompanionStateRow,
+        BaseReferences<_$AppDatabase, $CompanionStatesTable, CompanionStateRow>,
+      ),
+      CompanionStateRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6331,4 +7968,8 @@ class $AppDatabaseManager {
       $$AppSettingsTableTableManager(_db, _db.appSettings);
   $$SeedMetadataTableTableManager get seedMetadata =>
       $$SeedMetadataTableTableManager(_db, _db.seedMetadata);
+  $$DinoMemoriesTableTableManager get dinoMemories =>
+      $$DinoMemoriesTableTableManager(_db, _db.dinoMemories);
+  $$CompanionStatesTableTableManager get companionStates =>
+      $$CompanionStatesTableTableManager(_db, _db.companionStates);
 }

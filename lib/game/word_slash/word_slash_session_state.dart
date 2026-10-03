@@ -214,7 +214,10 @@ class WordSlashSessionState {
     return _copyWith(playAreaSize: size);
   }
 
-  static Word? _pickNonColliding(List<Word> pool, Set<String> excludingPairIds) {
+  static Word? _pickNonColliding(
+    List<Word> pool,
+    Set<String> excludingPairIds,
+  ) {
     for (final word in pool) {
       if (!excludingPairIds.contains(word.id)) return word;
     }
@@ -242,7 +245,9 @@ class WordSlashSessionState {
       final word = _pickNonColliding(pool, usedPairIds);
       if (word == null) break;
       usedPairIds.add(word.id);
-      newBubbles.addAll(_spawnPairBubbles(word, random: random, config: config));
+      newBubbles.addAll(
+        _spawnPairBubbles(word, random: random, config: config),
+      );
     }
     return _copyWith(
       sessionPhase: WordSlashSessionPhase.running,
@@ -313,7 +318,10 @@ class WordSlashSessionState {
       if (next == null) break;
       pool = pool.where((w) => w.id != next.id).toList();
       activePairIds.add(next.id);
-      moved = [...moved, ..._spawnPairBubbles(next, random: random, config: config)];
+      moved = [
+        ...moved,
+        ..._spawnPairBubbles(next, random: random, config: config),
+      ];
     }
 
     return _copyWith(
@@ -422,7 +430,9 @@ class WordSlashSessionState {
       margin + random.nextDouble() * (height - margin * 2),
     );
     final angle = random.nextDouble() * 2 * pi;
-    final speed = config.minSpeed + random.nextDouble() * (config.maxSpeed - config.minSpeed);
+    final speed =
+        config.minSpeed +
+        random.nextDouble() * (config.maxSpeed - config.minSpeed);
     final velocity = Offset(cos(angle) * speed, sin(angle) * speed);
     final suffix = random.nextInt(1 << 32);
     return WordSlashBubble(
@@ -495,11 +505,16 @@ class WordSlashSessionState {
     if (sessionPhase != WordSlashSessionPhase.running || isRoundComplete) {
       return _copyWith(swipeHitBubbleIds: const {});
     }
-    final gestureHits = bubbles.where((b) => swipeHitBubbleIds.contains(b.id)).toList();
+    final gestureHits = bubbles
+        .where((b) => swipeHitBubbleIds.contains(b.id))
+        .toList();
     if (gestureHits.isEmpty) {
       // Missed entirely -- leaves any existing selection untouched so the
       // player can keep trying to find the second bubble.
-      return _copyWith(swipeHitBubbleIds: const {}, lastOutcome: WordSlashOutcome.none);
+      return _copyWith(
+        swipeHitBubbleIds: const {},
+        lastOutcome: WordSlashOutcome.none,
+      );
     }
 
     final candidates = <WordSlashBubble>[];
@@ -524,7 +539,8 @@ class WordSlashSessionState {
         lastOutcome: WordSlashOutcome.none,
       );
     }
-    if (candidates.length == 2 && candidates[0].pairId == candidates[1].pairId) {
+    if (candidates.length == 2 &&
+        candidates[0].pairId == candidates[1].pairId) {
       return _applyCorrectPair(candidates[0], candidates[1], random: random);
     }
     return _applyWrongPair();
@@ -546,13 +562,16 @@ class WordSlashSessionState {
     WordSlashBubble b, {
     required Random random,
   }) {
-    final remaining = bubbles.where((bub) => bub.id != a.id && bub.id != b.id).toList();
+    final remaining = bubbles
+        .where((bub) => bub.id != a.id && bub.id != b.id)
+        .toList();
     final activePairIds = {for (final bub in remaining) bub.pairId};
     final replacement = _pickNonColliding(pendingWords, activePairIds);
     final config = WordSlashRoundConfig.forRound(roundNumber);
     final newBubbles = [
       ...remaining,
-      if (replacement != null) ..._spawnPairBubbles(replacement, random: random, config: config),
+      if (replacement != null)
+        ..._spawnPairBubbles(replacement, random: random, config: config),
     ];
     final newCombo = combo + 1 > WordSlashRoundConfig.comboCap
         ? WordSlashRoundConfig.comboCap
@@ -561,7 +580,9 @@ class WordSlashSessionState {
     // uncapped, same spirit as the combo multiplier rewarding skilled play.
     final extendedTime =
         (roundTimeRemaining ?? Duration.zero) +
-        const Duration(seconds: WordSlashRoundConfig.bonusSecondsPerCorrectPair);
+        const Duration(
+          seconds: WordSlashRoundConfig.bonusSecondsPerCorrectPair,
+        );
     return _copyWith(
       bubbles: newBubbles,
       pendingWords: replacement == null

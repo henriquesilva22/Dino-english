@@ -23,7 +23,10 @@ class FloatingTextComponent extends TextComponent {
          ),
        ) {
     add(
-      MoveByEffect(Vector2(0, -40), EffectController(duration: 0.7, curve: Curves.easeOut)),
+      MoveByEffect(
+        Vector2(0, -40),
+        EffectController(duration: 0.7, curve: Curves.easeOut),
+      ),
     );
     add(
       OpacityEffect.fadeOut(

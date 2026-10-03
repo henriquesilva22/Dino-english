@@ -34,9 +34,15 @@ class _AppShellScreenState extends ConsumerState<AppShellScreen> {
         index: selected,
         children: [
           const HomeScreen(),
-          _visitedTabs.contains(1) ? const StudyScreen() : const SizedBox.shrink(),
-          _visitedTabs.contains(2) ? const PetSelectionScreen() : const SizedBox.shrink(),
-          _visitedTabs.contains(3) ? const ProfileScreen() : const SizedBox.shrink(),
+          _visitedTabs.contains(1)
+              ? const StudyScreen()
+              : const SizedBox.shrink(),
+          _visitedTabs.contains(2)
+              ? const PetSelectionScreen()
+              : const SizedBox.shrink(),
+          _visitedTabs.contains(3)
+              ? const ProfileScreen()
+              : const SizedBox.shrink(),
         ],
       ),
       bottomNavigationBar: const NeonBottomNav(),

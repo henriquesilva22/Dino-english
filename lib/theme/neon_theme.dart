@@ -20,11 +20,12 @@ final ThemeData neonThemeData = ThemeData(
     surfaceContainerHighest: NeonColors.surface,
     onSurfaceVariant: NeonColors.textSecondary,
   ),
-  textTheme: const TextTheme(
-    bodyMedium: TextStyle(color: NeonColors.textPrimary),
-    bodySmall: TextStyle(color: NeonColors.textSecondary),
-  ).apply(
-    bodyColor: NeonColors.textPrimary,
-    displayColor: NeonColors.textPrimary,
-  ),
+  textTheme:
+      const TextTheme(
+        bodyMedium: TextStyle(color: NeonColors.textPrimary),
+        bodySmall: TextStyle(color: NeonColors.textSecondary),
+      ).apply(
+        bodyColor: NeonColors.textPrimary,
+        displayColor: NeonColors.textPrimary,
+      ),
 );

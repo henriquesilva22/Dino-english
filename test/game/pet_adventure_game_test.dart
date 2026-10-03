@@ -81,13 +81,16 @@ void main() {
     },
   );
 
-  test('endSession() is idempotent -- calling it twice only stops music once', () async {
-    final sound = _FakeAdventureSoundService();
-    final game = _buildGame(sound);
+  test(
+    'endSession() is idempotent -- calling it twice only stops music once',
+    () async {
+      final sound = _FakeAdventureSoundService();
+      final game = _buildGame(sound);
 
-    await game.endSession();
-    await game.endSession();
+      await game.endSession();
+      await game.endSession();
 
-    expect(sound.stopMusicCallCount, 1);
-  });
+      expect(sound.stopMusicCallCount, 1);
+    },
+  );
 }

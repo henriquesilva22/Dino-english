@@ -40,7 +40,8 @@ class PetAdventureGameScreen extends ConsumerStatefulWidget {
 /// re-locks landscape) runs before the *old* screen's [dispose] (which only
 /// fires once its exit animation finishes) -- an unconditional restore in
 /// dispose would un-lock landscape while the new screen is still active.
-class _PetAdventureGameScreenState extends ConsumerState<PetAdventureGameScreen> {
+class _PetAdventureGameScreenState
+    extends ConsumerState<PetAdventureGameScreen> {
   static int _lockGeneration = 0;
   late final int _myGeneration;
 
@@ -52,14 +53,20 @@ class _PetAdventureGameScreenState extends ConsumerState<PetAdventureGameScreen>
   void initState() {
     super.initState();
     _myGeneration = ++_lockGeneration;
-    unawaited(SystemChrome.setPreferredOrientations(kGameLandscapeOrientations));
-    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky));
+    unawaited(
+      SystemChrome.setPreferredOrientations(kGameLandscapeOrientations),
+    );
+    unawaited(
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
+    );
   }
 
   @override
   void dispose() {
     if (_lockGeneration == _myGeneration) {
-      unawaited(SystemChrome.setPreferredOrientations(kAppPortraitOrientations));
+      unawaited(
+        SystemChrome.setPreferredOrientations(kAppPortraitOrientations),
+      );
       unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     }
     super.dispose();
@@ -82,7 +89,9 @@ class _PetAdventureGameScreenState extends ConsumerState<PetAdventureGameScreen>
     final game = _activeGame;
     if (game != null) {
       await game.endSession();
-      unawaited(SystemChrome.setPreferredOrientations(kAppPortraitOrientations));
+      unawaited(
+        SystemChrome.setPreferredOrientations(kAppPortraitOrientations),
+      );
       unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     }
     if (mounted) Navigator.of(context).pop();
@@ -132,8 +141,7 @@ class _PetAdventurePlayArea extends ConsumerStatefulWidget {
       _PetAdventurePlayAreaState();
 }
 
-class _PetAdventurePlayAreaState
-    extends ConsumerState<_PetAdventurePlayArea> {
+class _PetAdventurePlayAreaState extends ConsumerState<_PetAdventurePlayArea> {
   late final PetAdventureGame _game;
   late final AdventureSoundService _sound;
 
@@ -160,7 +168,9 @@ class _PetAdventurePlayAreaState
       ),
       onBossStateChanged: widget.isBossFight
           ? (_, damage) => unawaited(
-              ref.read(bossFightControllerProvider.notifier).hit(damage: damage),
+              ref
+                  .read(bossFightControllerProvider.notifier)
+                  .hit(damage: damage),
             )
           : null,
     );
@@ -195,10 +205,7 @@ class _PetAdventurePlayAreaState
       }
     });
     if (widget.isBossFight) {
-      ref.listen<BossFightState>(bossFightControllerProvider, (
-        previous,
-        next,
-      ) {
+      ref.listen<BossFightState>(bossFightControllerProvider, (previous, next) {
         if (next.isFinished && (previous == null || !previous.isFinished)) {
           unawaited(_game.endSession());
           _sound.play(AdventureSfx.roundEnd);
@@ -208,7 +215,8 @@ class _PetAdventurePlayAreaState
     final isGameOver = ref.watch(
       minigameControllerProvider.select((s) => s.isGameOver),
     );
-    final bossVictory = widget.isBossFight &&
+    final bossVictory =
+        widget.isBossFight &&
         ref.watch(bossFightControllerProvider.select((s) => s.isFinished));
 
     // Every direct Stack child must be Positioned: a Stack with even one

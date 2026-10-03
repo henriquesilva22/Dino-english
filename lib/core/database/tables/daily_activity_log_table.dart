@@ -9,12 +9,15 @@ class DailyActivityLog extends Table {
   /// Local calendar date, `YYYY-MM-DD`. Text, not a DateTime column, so
   /// "same day" comparisons don't depend on time-of-day/timezone.
   TextColumn get studyDate => text()();
-  IntColumn get exercisesCompleted => integer().withDefault(const Constant(0))();
+  IntColumn get exercisesCompleted =>
+      integer().withDefault(const Constant(0))();
   IntColumn get correctCount => integer().withDefault(const Constant(0))();
   IntColumn get xpEarned => integer().withDefault(const Constant(0))();
+
   /// Flips to true once [exercisesCompleted] crosses the active-day
   /// threshold for that date; recomputed on each write within the day.
-  BoolColumn get countsAsActiveDay => boolean().withDefault(const Constant(false))();
+  BoolColumn get countsAsActiveDay =>
+      boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {studyDate};

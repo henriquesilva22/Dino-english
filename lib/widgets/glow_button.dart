@@ -89,10 +89,7 @@ class GlowButton extends StatelessWidget {
             radius: 24,
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                vertical: 16,
-                horizontal: 20,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
               color: NeonColors.surface.withValues(alpha: 0.6),
               child: content,
             ),

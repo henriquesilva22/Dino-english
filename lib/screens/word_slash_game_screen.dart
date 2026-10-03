@@ -16,7 +16,8 @@ class WordSlashGameScreen extends ConsumerStatefulWidget {
   const WordSlashGameScreen({super.key});
 
   @override
-  ConsumerState<WordSlashGameScreen> createState() => _WordSlashGameScreenState();
+  ConsumerState<WordSlashGameScreen> createState() =>
+      _WordSlashGameScreenState();
 }
 
 /// Locks landscape for as long as this screen is on top, restoring
@@ -32,14 +33,20 @@ class _WordSlashGameScreenState extends ConsumerState<WordSlashGameScreen> {
   void initState() {
     super.initState();
     _myGeneration = ++_lockGeneration;
-    unawaited(SystemChrome.setPreferredOrientations(kGameLandscapeOrientations));
-    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky));
+    unawaited(
+      SystemChrome.setPreferredOrientations(kGameLandscapeOrientations),
+    );
+    unawaited(
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
+    );
   }
 
   @override
   void dispose() {
     if (_lockGeneration == _myGeneration) {
-      unawaited(SystemChrome.setPreferredOrientations(kAppPortraitOrientations));
+      unawaited(
+        SystemChrome.setPreferredOrientations(kAppPortraitOrientations),
+      );
       unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     }
     super.dispose();
@@ -205,7 +212,9 @@ class _WordSlashPlayAreaState extends ConsumerState<_WordSlashPlayArea>
                                   bubble: bubble,
                                   isHit:
                                       bubble.id == state.selectedBubbleId ||
-                                      state.swipeHitBubbleIds.contains(bubble.id),
+                                      state.swipeHitBubbleIds.contains(
+                                        bubble.id,
+                                      ),
                                 ),
                               ),
                           ],
@@ -266,14 +275,20 @@ class _WordSlashTopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          _TopBarChip(label: 'FASE ${state.roundNumber}', color: NeonColors.purple),
+          _TopBarChip(
+            label: 'FASE ${state.roundNumber}',
+            color: NeonColors.purple,
+          ),
           const SizedBox(width: 10),
           _TopBarChip(label: '⏱ ${seconds}s', color: NeonColors.cyan),
           const SizedBox(width: 10),
           _TopBarChip(label: 'SCORE ${state.score}', color: NeonColors.orange),
           if (state.combo > 1) ...[
             const SizedBox(width: 10),
-            _TopBarChip(label: 'COMBO x${state.combo}', color: NeonColors.green),
+            _TopBarChip(
+              label: 'COMBO x${state.combo}',
+              color: NeonColors.green,
+            ),
           ],
           const Spacer(),
         ],
@@ -299,7 +314,11 @@ class _TopBarChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
       ),
     );
   }
@@ -323,7 +342,9 @@ class _SwipeTrailPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
     for (var i = 1; i < points.length; i++) {
-      paint.color = NeonColors.cyan.withValues(alpha: 0.15 + 0.6 * (i / points.length));
+      paint.color = NeonColors.cyan.withValues(
+        alpha: 0.15 + 0.6 * (i / points.length),
+      );
       canvas.drawLine(points[i - 1], points[i], paint);
     }
   }

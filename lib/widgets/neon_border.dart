@@ -26,7 +26,10 @@ class NeonBorder extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: color.withValues(alpha: 0.8), width: borderWidth),
+        border: Border.all(
+          color: color.withValues(alpha: 0.8),
+          width: borderWidth,
+        ),
         boxShadow: glow
             ? [
                 BoxShadow(

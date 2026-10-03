@@ -9,15 +9,21 @@ import '../database/app_database.dart';
 /// derived from the style rather than combined freely -- every style
 /// besides [fillBlank] assembles the full sentence from a scrambled word
 /// bank; [fillBlank] instead blanks out 1-2 tokens of that same sentence.
-enum SentenceExerciseStyle { translationHint, situationHint, fillBlank, emojiHint }
+enum SentenceExerciseStyle {
+  translationHint,
+  situationHint,
+  fillBlank,
+  emojiHint,
+}
 
 extension SentenceExerciseStyleX on SentenceExerciseStyle {
-  static SentenceExerciseStyle forDifficulty(int difficulty) => switch (difficulty) {
-    1 => SentenceExerciseStyle.translationHint,
-    2 => SentenceExerciseStyle.situationHint,
-    3 => SentenceExerciseStyle.fillBlank,
-    _ => SentenceExerciseStyle.emojiHint,
-  };
+  static SentenceExerciseStyle forDifficulty(int difficulty) =>
+      switch (difficulty) {
+        1 => SentenceExerciseStyle.translationHint,
+        2 => SentenceExerciseStyle.situationHint,
+        3 => SentenceExerciseStyle.fillBlank,
+        _ => SentenceExerciseStyle.emojiHint,
+      };
 
   bool get isAssemble => this != SentenceExerciseStyle.fillBlank;
 }

@@ -84,3 +84,15 @@ Tornar o aprendizado de ingles mais pratico e divertido por meio de sessoes
 curtas, exercicios interativos, repeticao, audio e uma progressao inspirada
 em jogos, mantendo a experiencia acessivel mesmo quando o usuario estiver
 offline.
+
+## Modelo de voz offline
+
+O reconhecimento de voz do companheiro usa o Whisper tiny (int8, ~104 MB),
+empacotado dentro do app para funcionar sem internet. Os arquivos sao grandes
+demais para o git, entao baixe-os uma vez antes de compilar:
+
+```bash
+bash tool/download_voice_model.sh
+```
+
+Sem eles o app funciona normalmente, apenas sem o botao de microfone.

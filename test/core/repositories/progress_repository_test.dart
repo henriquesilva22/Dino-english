@@ -95,41 +95,41 @@ void main() {
       expect(result.xpAwarded, kDefaultCorrectAnswerXp);
       final profile = await repository.fetchUserProfile();
       expect(profile.totalXp, kDefaultCorrectAnswerXp);
-      expect(profile.currentLevel, LevelCurve().levelForTotalXp(profile.totalXp));
+      expect(
+        profile.currentLevel,
+        LevelCurve().levelForTotalXp(profile.totalXp),
+      );
     },
   );
 
-  test(
-    'wrong answer grants zero XP but still demotes word_progress',
-    () async {
-      await _insertWord(database, 'word.a');
-      await _seedProfile(database);
+  test('wrong answer grants zero XP but still demotes word_progress', () async {
+    await _insertWord(database, 'word.a');
+    await _seedProfile(database);
 
-      await repository.recordAnswer(
-        wordId: 'word.a',
-        wasCorrect: true,
-        exerciseType: 'multiple_choice',
-        sessionKind: SessionKind.study,
-        sessionId: 's1',
-        now: DateTime(2026, 1, 1, 10),
-      );
-      final afterCorrect = await repository.fetchUserProfile();
+    await repository.recordAnswer(
+      wordId: 'word.a',
+      wasCorrect: true,
+      exerciseType: 'multiple_choice',
+      sessionKind: SessionKind.study,
+      sessionId: 's1',
+      now: DateTime(2026, 1, 1, 10),
+    );
+    final afterCorrect = await repository.fetchUserProfile();
 
-      final wrongResult = await repository.recordAnswer(
-        wordId: 'word.a',
-        wasCorrect: false,
-        exerciseType: 'multiple_choice',
-        sessionKind: SessionKind.study,
-        sessionId: 's1',
-        now: DateTime(2026, 1, 1, 11),
-      );
+    final wrongResult = await repository.recordAnswer(
+      wordId: 'word.a',
+      wasCorrect: false,
+      exerciseType: 'multiple_choice',
+      sessionKind: SessionKind.study,
+      sessionId: 's1',
+      now: DateTime(2026, 1, 1, 11),
+    );
 
-      expect(wrongResult.xpAwarded, 0);
-      expect(wrongResult.newMasteryLevel, 0);
-      final afterWrong = await repository.fetchUserProfile();
-      expect(afterWrong.totalXp, afterCorrect.totalXp);
-    },
-  );
+    expect(wrongResult.xpAwarded, 0);
+    expect(wrongResult.newMasteryLevel, 0);
+    final afterWrong = await repository.fetchUserProfile();
+    expect(afterWrong.totalXp, afterCorrect.totalXp);
+  });
 
   test(
     'a null wordId (fake minigame word) never creates a word_progress row',
@@ -329,42 +329,39 @@ void main() {
     },
   );
 
-  test(
-    'exercise_attempts records the right sessionKind/exerciseType/xpAwarded '
-    'for both study and minigame answers',
-    () async {
-      await _insertWord(database, 'word.a');
-      await _seedProfile(database);
+  test('exercise_attempts records the right sessionKind/exerciseType/xpAwarded '
+      'for both study and minigame answers', () async {
+    await _insertWord(database, 'word.a');
+    await _seedProfile(database);
 
-      await repository.recordAnswer(
-        wordId: 'word.a',
-        wasCorrect: true,
-        exerciseType: 'multiple_choice',
-        sessionKind: SessionKind.study,
-        sessionId: 'study-session',
-        now: DateTime(2026, 1, 1, 9),
-      );
-      await repository.recordAnswer(
-        wordId: null,
-        wasCorrect: true,
-        exerciseType: 'minigame_collect',
-        sessionKind: SessionKind.review,
-        sessionId: 'minigame-session',
-        xpOverride: 5,
-        now: DateTime(2026, 1, 1, 10),
-      );
+    await repository.recordAnswer(
+      wordId: 'word.a',
+      wasCorrect: true,
+      exerciseType: 'multiple_choice',
+      sessionKind: SessionKind.study,
+      sessionId: 'study-session',
+      now: DateTime(2026, 1, 1, 9),
+    );
+    await repository.recordAnswer(
+      wordId: null,
+      wasCorrect: true,
+      exerciseType: 'minigame_collect',
+      sessionKind: SessionKind.review,
+      sessionId: 'minigame-session',
+      xpOverride: 5,
+      now: DateTime(2026, 1, 1, 10),
+    );
 
-      final attempts = await (database.select(
-        database.exerciseAttempts,
-      )..orderBy([(t) => OrderingTerm.asc(t.attemptedAt)])).get();
+    final attempts = await (database.select(
+      database.exerciseAttempts,
+    )..orderBy([(t) => OrderingTerm.asc(t.attemptedAt)])).get();
 
-      expect(attempts, hasLength(2));
-      expect(attempts[0].exerciseType, 'multiple_choice');
-      expect(attempts[0].sessionKind, 'study');
-      expect(attempts[0].xpAwarded, kDefaultCorrectAnswerXp);
-      expect(attempts[1].exerciseType, 'minigame_collect');
-      expect(attempts[1].sessionKind, 'review');
-      expect(attempts[1].xpAwarded, 5);
-    },
-  );
+    expect(attempts, hasLength(2));
+    expect(attempts[0].exerciseType, 'multiple_choice');
+    expect(attempts[0].sessionKind, 'study');
+    expect(attempts[0].xpAwarded, kDefaultCorrectAnswerXp);
+    expect(attempts[1].exerciseType, 'minigame_collect');
+    expect(attempts[1].sessionKind, 'review');
+    expect(attempts[1].xpAwarded, 5);
+  });
 }

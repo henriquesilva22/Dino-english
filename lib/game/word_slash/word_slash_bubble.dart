@@ -48,7 +48,9 @@ class WordSlashBubble {
     if (lengthSquared == 0) {
       return (a - position).distance <= hitRadius;
     }
-    final t = (((position - a).dx * ab.dx) + ((position - a).dy * ab.dy)) / lengthSquared;
+    final t =
+        (((position - a).dx * ab.dx) + ((position - a).dy * ab.dy)) /
+        lengthSquared;
     final clampedT = t < 0 ? 0.0 : (t > 1 ? 1.0 : t);
     final closest = a + ab * clampedT;
     return (closest - position).distance <= hitRadius;

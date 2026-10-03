@@ -12,7 +12,11 @@ import '../../theme/neon_colors.dart';
 /// above every bubble, and must see the whole continuous drag regardless
 /// of what's visually underneath it.
 class WordSlashBubbleWidget extends StatelessWidget {
-  const WordSlashBubbleWidget({required this.bubble, this.isHit = false, super.key});
+  const WordSlashBubbleWidget({
+    required this.bubble,
+    this.isHit = false,
+    super.key,
+  });
 
   final WordSlashBubble bubble;
 

@@ -38,15 +38,13 @@ class WordRepository {
     }).toList();
   }
 
-  Future<List<Word>> fetchActiveWords() =>
-      (_database.select(_database.words)
-            ..where((w) => w.isActive.equals(true)))
-          .get();
+  Future<List<Word>> fetchActiveWords() => (_database.select(
+    _database.words,
+  )..where((w) => w.isActive.equals(true))).get();
 
-  Future<Word?> fetchWordById(String id) =>
-      (_database.select(
-        _database.words,
-      )..where((w) => w.id.equals(id))).getSingleOrNull();
+  Future<Word?> fetchWordById(String id) => (_database.select(
+    _database.words,
+  )..where((w) => w.id.equals(id))).getSingleOrNull();
 
   /// Every active word as a [DistractorCandidate], for [DistractorPicker].
   Future<List<DistractorCandidate>> fetchDistractorPool() async {

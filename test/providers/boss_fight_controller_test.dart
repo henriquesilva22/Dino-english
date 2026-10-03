@@ -12,7 +12,10 @@ Future<AppDatabase> _seededDatabase() async {
   await database
       .into(database.userProfile)
       .insertOnConflictUpdate(
-        UserProfileCompanion.insert(id: const Value(1), createdAt: DateTime(2026)),
+        UserProfileCompanion.insert(
+          id: const Value(1),
+          createdAt: DateTime(2026),
+        ),
       );
   await database
       .into(database.dinoEvolutionState)
@@ -38,24 +41,28 @@ void main() {
     await database.close();
   });
 
-  test('hit() below zero HP records exactly one boss-victory exercise attempt', () async {
-    final notifier = container.read(bossFightControllerProvider.notifier);
-    final hitsToWin = (BossFightState.startingHp / BossFightState.normalWordDamage).ceil();
+  test(
+    'hit() below zero HP records exactly one boss-victory exercise attempt',
+    () async {
+      final notifier = container.read(bossFightControllerProvider.notifier);
+      final hitsToWin =
+          (BossFightState.startingHp / BossFightState.normalWordDamage).ceil();
 
-    for (var i = 0; i < hitsToWin; i++) {
-      await notifier.hit();
-    }
+      for (var i = 0; i < hitsToWin; i++) {
+        await notifier.hit();
+      }
 
-    final state = container.read(bossFightControllerProvider);
-    expect(state.isFinished, isTrue);
-    expect(state.hp, 0);
+      final state = container.read(bossFightControllerProvider);
+      expect(state.isFinished, isTrue);
+      expect(state.hp, 0);
 
-    final attempts = await database.select(database.exerciseAttempts).get();
-    expect(attempts, hasLength(1));
-    expect(attempts.single.exerciseType, 'minigame_boss_victory');
-    expect(attempts.single.wordId, null);
-    expect(attempts.single.xpAwarded, BossFightState.victoryBonusXp);
-  });
+      final attempts = await database.select(database.exerciseAttempts).get();
+      expect(attempts, hasLength(1));
+      expect(attempts.single.exerciseType, 'minigame_boss_victory');
+      expect(attempts.single.wordId, null);
+      expect(attempts.single.xpAwarded, BossFightState.victoryBonusXp);
+    },
+  );
 
   test('hit() calls before victory record nothing', () async {
     final notifier = container.read(bossFightControllerProvider.notifier);
@@ -66,26 +73,36 @@ void main() {
     expect(attempts, isEmpty);
   });
 
-  test('hit() calls after victory are no-ops and record nothing further', () async {
-    final notifier = container.read(bossFightControllerProvider.notifier);
-    final hitsToWin = (BossFightState.startingHp / BossFightState.normalWordDamage).ceil();
+  test(
+    'hit() calls after victory are no-ops and record nothing further',
+    () async {
+      final notifier = container.read(bossFightControllerProvider.notifier);
+      final hitsToWin =
+          (BossFightState.startingHp / BossFightState.normalWordDamage).ceil();
 
-    for (var i = 0; i < hitsToWin; i++) {
+      for (var i = 0; i < hitsToWin; i++) {
+        await notifier.hit();
+      }
       await notifier.hit();
-    }
-    await notifier.hit();
-    await notifier.hit();
+      await notifier.hit();
 
-    final attempts = await database.select(database.exerciseAttempts).get();
-    expect(attempts, hasLength(1));
-  });
+      final attempts = await database.select(database.exerciseAttempts).get();
+      expect(attempts, hasLength(1));
+    },
+  );
 
-  test('hit(damage:) applies the exact amount passed, not the default', () async {
-    final notifier = container.read(bossFightControllerProvider.notifier);
+  test(
+    'hit(damage:) applies the exact amount passed, not the default',
+    () async {
+      final notifier = container.read(bossFightControllerProvider.notifier);
 
-    await notifier.hit(damage: BossFightState.hardWordDamage);
+      await notifier.hit(damage: BossFightState.hardWordDamage);
 
-    final state = container.read(bossFightControllerProvider);
-    expect(state.hp, BossFightState.startingHp - BossFightState.hardWordDamage);
-  });
+      final state = container.read(bossFightControllerProvider);
+      expect(
+        state.hp,
+        BossFightState.startingHp - BossFightState.hardWordDamage,
+      );
+    },
+  );
 }

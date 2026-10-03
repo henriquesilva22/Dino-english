@@ -6,7 +6,11 @@ import '../theme/neon_colors.dart';
 import 'animated_glow.dart';
 
 class _NavDestination {
-  const _NavDestination({required this.key, required this.icon, required this.label});
+  const _NavDestination({
+    required this.key,
+    required this.icon,
+    required this.label,
+  });
   final String key;
   final String icon;
   final String label;

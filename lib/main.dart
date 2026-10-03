@@ -43,12 +43,10 @@ class _AppBootstrapGate extends ConsumerWidget {
     final bootstrap = ref.watch(appBootstrapProvider);
 
     return bootstrap.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
-      error: (error, stack) => Scaffold(
-        body: Center(child: Text('Erro ao iniciar o app: $error')),
-      ),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (error, stack) =>
+          Scaffold(body: Center(child: Text('Erro ao iniciar o app: $error'))),
       data: (_) => const AppShellScreen(),
     );
   }

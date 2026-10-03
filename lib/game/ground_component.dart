@@ -19,7 +19,9 @@ class GroundComponent extends PositionComponent {
 
   static const double _tileSize = 64;
 
-  late final Sprite _tileSprite = Sprite(Flame.images.fromCache(kGroundTileAsset));
+  late final Sprite _tileSprite = Sprite(
+    Flame.images.fromCache(kGroundTileAsset),
+  );
 
   double _scrollOffset = 0;
 
@@ -43,11 +45,7 @@ class GroundComponent extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
-    for (
-      var x = -_scrollOffset;
-      x < size.x + _tileSize;
-      x += _tileSize
-    ) {
+    for (var x = -_scrollOffset; x < size.x + _tileSize; x += _tileSize) {
       _tileSprite.render(
         canvas,
         position: Vector2(x, 0),

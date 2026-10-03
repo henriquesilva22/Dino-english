@@ -255,9 +255,7 @@ class _AssembleBody extends StatelessWidget {
           decoration: BoxDecoration(
             color: NeonColors.background.withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: NeonColors.cyan.withValues(alpha: 0.25),
-            ),
+            border: Border.all(color: NeonColors.cyan.withValues(alpha: 0.25)),
           ),
           child: Wrap(
             spacing: 8,
@@ -370,7 +368,9 @@ class _FillBlankBody extends StatelessWidget {
 
   Widget _blankOptionChip(SentenceBlank blank, String option) {
     final selected = session.selectedBlankAnswers[blank.tokenIndex] == option;
-    var state = selected ? WordChipVisualState.placed : WordChipVisualState.idle;
+    var state = selected
+        ? WordChipVisualState.placed
+        : WordChipVisualState.idle;
     if (session.isSubmitted && selected) {
       state = option == blank.correctText
           ? WordChipVisualState.correct

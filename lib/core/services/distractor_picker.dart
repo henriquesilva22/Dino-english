@@ -38,16 +38,18 @@ class DistractorPicker {
         )
         .toList();
 
-    final closeMatch = eligible
-        .where(
-          (c) =>
-              c.category == correct.category &&
-              (c.difficulty - correct.difficulty).abs() <= 1,
-        )
-        .toList()
-      ..shuffle(rng);
-    final sameCategory = eligible.where((c) => c.category == correct.category).toList()
-      ..shuffle(rng);
+    final closeMatch =
+        eligible
+            .where(
+              (c) =>
+                  c.category == correct.category &&
+                  (c.difficulty - correct.difficulty).abs() <= 1,
+            )
+            .toList()
+          ..shuffle(rng);
+    final sameCategory =
+        eligible.where((c) => c.category == correct.category).toList()
+          ..shuffle(rng);
     final anyEligible = List.of(eligible)..shuffle(rng);
 
     final result = <DistractorCandidate>[];

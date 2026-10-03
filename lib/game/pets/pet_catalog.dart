@@ -42,8 +42,7 @@ const List<PetDefinition> kPetCatalog = [
   PetDefinition(
     id: 'caterpillar',
     displayName: 'Lagarta',
-    modelAsset:
-        "assets/sprites/characters/Models/GLB/animal-caterpillar.glb",
+    modelAsset: "assets/sprites/characters/Models/GLB/animal-caterpillar.glb",
     previewAsset: 'assets/sprites/characters/Previews/animal-caterpillar.png',
   ),
   PetDefinition(
@@ -79,8 +78,7 @@ const List<PetDefinition> kPetCatalog = [
   PetDefinition(
     id: 'elephant',
     displayName: 'Elefante',
-    modelAsset:
-        "assets/sprites/characters/Models/GLB/animal-elephant.glb",
+    modelAsset: "assets/sprites/characters/Models/GLB/animal-elephant.glb",
     previewAsset: 'assets/sprites/characters/Previews/animal-elephant.png',
   ),
   PetDefinition(
@@ -98,8 +96,7 @@ const List<PetDefinition> kPetCatalog = [
   PetDefinition(
     id: 'giraffe',
     displayName: 'Girafa',
-    modelAsset:
-        "assets/sprites/characters/Models/GLB/animal-giraffe.glb",
+    modelAsset: "assets/sprites/characters/Models/GLB/animal-giraffe.glb",
     previewAsset: 'assets/sprites/characters/Previews/animal-giraffe.png',
   ),
   PetDefinition(
@@ -141,8 +138,7 @@ const List<PetDefinition> kPetCatalog = [
   PetDefinition(
     id: 'penguin',
     displayName: 'Pinguim',
-    modelAsset:
-        "assets/sprites/characters/Models/GLB/animal-penguin.glb",
+    modelAsset: "assets/sprites/characters/Models/GLB/animal-penguin.glb",
     previewAsset: 'assets/sprites/characters/Previews/animal-penguin.png',
   ),
   PetDefinition(

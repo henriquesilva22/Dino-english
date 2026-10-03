@@ -25,7 +25,10 @@ class HomeTopBar extends StatelessWidget {
               fontWeight: FontWeight.bold,
               color: NeonColors.cyan,
               shadows: [
-                Shadow(color: NeonColors.cyan.withValues(alpha: 0.6), blurRadius: 12),
+                Shadow(
+                  color: NeonColors.cyan.withValues(alpha: 0.6),
+                  blurRadius: 12,
+                ),
               ],
             ),
           ),

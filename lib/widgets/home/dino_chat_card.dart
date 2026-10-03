@@ -3,22 +3,22 @@ import 'package:flutter/material.dart';
 import '../../theme/neon_colors.dart';
 import '../neon_card.dart';
 
-/// "CONVERSAR COM O DINO" secondary Home card -- disabled/"coming soon"
-/// for now. Conversation/voice recognition is explicitly future work
-/// (the end of the PALAVRA -> ... -> CONVERSAR COM O DINO roadmap); this
-/// only gives the access point the Home is meant to show.
+/// "BRINCAR COM O DINO" Home card -- opens the offline virtual companion
+/// (`DinoChatScreen`): talk, feed, play and learn English with the Dino.
+/// Same shape as `WordSlashCard`/`ExamCard`.
 class DinoChatCard extends StatelessWidget {
-  const DinoChatCard({super.key});
+  const DinoChatCard({super.key, required this.onTap});
+
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return NeonCard(
-      icon: const Text('💬', style: TextStyle(fontSize: 34)),
-      title: 'CONVERSAR COM O DINO',
-      subtitle: 'Em breve',
+      icon: const Text('🦖', style: TextStyle(fontSize: 34)),
+      title: 'BRINCAR COM O DINO',
+      subtitle: 'Converse, cuide e aprenda',
       accentColor: NeonColors.cyan,
-      enabled: false,
-      onTap: () {},
+      onTap: onTap,
     );
   }
 }

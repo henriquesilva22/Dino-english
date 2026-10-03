@@ -46,7 +46,8 @@ class MinigameController extends Notifier<MinigameRoundState> {
 
   @override
   MinigameRoundState build() {
-    _sessionId = 'minigame-${_sessionCounter++}-${DateTime.now().microsecondsSinceEpoch}';
+    _sessionId =
+        'minigame-${_sessionCounter++}-${DateTime.now().microsecondsSinceEpoch}';
     return const MinigameRoundState();
   }
 

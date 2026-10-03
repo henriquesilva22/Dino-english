@@ -74,11 +74,7 @@ class _AnimatedGlowPainter extends CustomPainter {
 
     final sweep = SweepGradient(
       transform: GradientRotation(progress.value * 2 * math.pi),
-      colors: [
-        color.withValues(alpha: 0),
-        color,
-        color.withValues(alpha: 0),
-      ],
+      colors: [color.withValues(alpha: 0), color, color.withValues(alpha: 0)],
       stops: const [0.0, 0.12, 0.28],
     );
 

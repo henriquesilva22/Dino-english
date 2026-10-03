@@ -45,6 +45,9 @@ dependencies:
   model_viewer_plus: ^1.10.0
   flame_audio: ^2.12.2
   flutter_tts: ^4.2.5
+  sherpa_onnx: ^1.13.8
+  record: ^7.1.1
+  webview_flutter: ^4.14.1
 
 dev_dependencies:
   flutter_test:
@@ -75,6 +78,8 @@ flutter:
     - assets/seed/words_seed.json
     - assets/models/egg/Egg_Asset_v04.glb
     - assets/models/dino/Dino_Baby_v2_animado.glb
+    # Offline voice model, fetched by tool/download_voice_model.sh.
+    - assets/models/voice/
     - assets/sprites/map/Sprites/Tiles/Default/
     - assets/sprites/map/Sprites/Backgrounds/Default/
     - assets/sprites/map/Sounds/

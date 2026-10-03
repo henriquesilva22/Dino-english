@@ -36,9 +36,8 @@ class EggShowcase extends ConsumerWidget {
 
     return progressAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, stack) => const Center(
-        child: Text('Não foi possível carregar o ovo'),
-      ),
+      error: (err, stack) =>
+          const Center(child: Text('Não foi possível carregar o ovo')),
       data: (info) {
         final percent = _hatchingPercent(info);
 

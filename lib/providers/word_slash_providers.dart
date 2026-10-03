@@ -88,7 +88,9 @@ class WordSlashController extends Notifier<WordSlashSessionState> {
     // for this instance by the time Riverpod gets around to disposing it.
     ref.onDispose(() {
       _logLifecycle(
-        _endedProperly ? 'DISPOSED' : 'DISPOSED (safety net -- endSession() never ran)',
+        _endedProperly
+            ? 'DISPOSED'
+            : 'DISPOSED (safety net -- endSession() never ran)',
       );
     });
     return const WordSlashSessionState();

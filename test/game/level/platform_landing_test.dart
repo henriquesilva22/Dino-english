@@ -20,20 +20,23 @@ void main() {
     expect(landing, ground);
   });
 
-  test('picks the highest platform crossed this frame, not the ground beyond it', () {
-    // Falling from well above `high`, past `mid` and `high`'s tops in one
-    // frame (a fast tick) -- the pet should land on the first (highest)
-    // surface it crosses, not tunnel through to a lower one.
-    final landing = resolveLanding(
-      footX: 100,
-      previousFootY: 300,
-      newFootY: 520,
-      velocityY: 900,
-      platforms: platforms,
-    );
+  test(
+    'picks the highest platform crossed this frame, not the ground beyond it',
+    () {
+      // Falling from well above `high`, past `mid` and `high`'s tops in one
+      // frame (a fast tick) -- the pet should land on the first (highest)
+      // surface it crosses, not tunnel through to a lower one.
+      final landing = resolveLanding(
+        footX: 100,
+        previousFootY: 300,
+        newFootY: 520,
+        velocityY: 900,
+        platforms: platforms,
+      );
 
-    expect(landing, high);
-  });
+      expect(landing, high);
+    },
+  );
 
   test('never lands while moving upward (mid-jump)', () {
     final landing = resolveLanding(

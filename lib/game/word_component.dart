@@ -69,19 +69,17 @@ class WordComponent extends PositionComponent with CollisionCallbacks {
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
   late final Paint _badgePaint = Paint()
     ..color = isCorrect ? _correctBorder : _incorrectBorder;
-  late final TextPainter _badgeText =
-      TextPainter(
-          text: TextSpan(
-            text: isCorrect ? '★' : '?',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        )
-        ..layout();
+  late final TextPainter _badgeText = TextPainter(
+    text: TextSpan(
+      text: isCorrect ? '★' : '?',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
 
   @override
   Future<void> onLoad() async {

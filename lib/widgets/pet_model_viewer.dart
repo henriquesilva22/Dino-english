@@ -44,7 +44,10 @@ class PetModelViewer extends StatelessWidget {
 }
 
 class _UnsupportedPlatformFallback extends StatelessWidget {
-  const _UnsupportedPlatformFallback({required this.height, required this.label});
+  const _UnsupportedPlatformFallback({
+    required this.height,
+    required this.label,
+  });
 
   final double height;
   final String label;

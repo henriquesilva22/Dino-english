@@ -25,16 +25,18 @@ class BossFightState {
   /// channel, intentionally.
   static const int hardWordDamage = 10;
 
-  /// `difficulty >= 3` is "hard". Seed data (120 words) skews easy: 73
-  /// difficulty=1, 39 difficulty=2, 7 difficulty=3, 1 difficulty=4 -- this
-  /// splits off the 8 advanced words (3-4) from the 112 beginner/
+  /// `difficulty >= 3` is "hard". Seed data (240 words) skews easy: 150
+  /// difficulty=1, 82 difficulty=2, 7 difficulty=3, 1 difficulty=4 -- this
+  /// splits off the 8 advanced words (3-4) from the 232 beginner/
   /// intermediate ones (1-2).
   static const int _hardDifficultyThreshold = 3;
 
   static const int victoryBonusXp = 50;
 
   static int damageForWordDifficulty(int difficulty) =>
-      difficulty >= _hardDifficultyThreshold ? hardWordDamage : normalWordDamage;
+      difficulty >= _hardDifficultyThreshold
+      ? hardWordDamage
+      : normalWordDamage;
 
   final int hp;
   final BossFightStatus status;

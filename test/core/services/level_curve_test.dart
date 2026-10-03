@@ -30,15 +30,21 @@ void main() {
     expect(curve.levelForTotalXp(thresholdForLevel10), 10);
   });
 
-  test('levelForTotalXp boundary: one XP below threshold stays at the previous level', () {
-    final thresholdForLevel10 = curve.xpForLevel(10);
-    expect(curve.levelForTotalXp(thresholdForLevel10 - 1), 9);
-  });
+  test(
+    'levelForTotalXp boundary: one XP below threshold stays at the previous level',
+    () {
+      final thresholdForLevel10 = curve.xpForLevel(10);
+      expect(curve.levelForTotalXp(thresholdForLevel10 - 1), 9);
+    },
+  );
 
-  test('levelForTotalXp boundary: one XP above threshold does not skip ahead', () {
-    final thresholdForLevel10 = curve.xpForLevel(10);
-    expect(curve.levelForTotalXp(thresholdForLevel10 + 1), 10);
-  });
+  test(
+    'levelForTotalXp boundary: one XP above threshold does not skip ahead',
+    () {
+      final thresholdForLevel10 = curve.xpForLevel(10);
+      expect(curve.levelForTotalXp(thresholdForLevel10 + 1), 10);
+    },
+  );
 
   test('level 1 for zero or negative XP', () {
     expect(curve.levelForTotalXp(0), 1);

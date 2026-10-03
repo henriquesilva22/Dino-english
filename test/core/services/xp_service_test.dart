@@ -32,7 +32,10 @@ void main() {
 
   test('a single large grant can cross multiple thresholds at once', () {
     final thresholdForLevel10 = curve.xpForLevel(10);
-    final result = service.grantXp(currentTotalXp: 0, xpToAdd: thresholdForLevel10);
+    final result = service.grantXp(
+      currentTotalXp: 0,
+      xpToAdd: thresholdForLevel10,
+    );
     expect(result.newLevel, 10);
     expect(result.levelsGained, 9);
   });

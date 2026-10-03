@@ -98,28 +98,37 @@ void main() {
       }
     });
 
-    test('never adds a decoy that duplicates a correct token (case-insensitive)', () {
-      final challenge = service.buildChallenge(
-        targetWord: target,
-        otherEnglishTerms: ['dog', 'Dog', 'cat', 'blue', 'run'],
-        random: Random(2),
-      );
+    test(
+      'never adds a decoy that duplicates a correct token (case-insensitive)',
+      () {
+        final challenge = service.buildChallenge(
+          targetWord: target,
+          otherEnglishTerms: ['dog', 'Dog', 'cat', 'blue', 'run'],
+          random: Random(2),
+        );
 
-      final dogCount = challenge.wordBank
-          .where((t) => t.text.toLowerCase() == 'dog')
-          .length;
-      expect(dogCount, 1); // only the real "dog" token from the sentence
-    });
+        final dogCount = challenge.wordBank
+            .where((t) => t.text.toLowerCase() == 'dog')
+            .length;
+        expect(dogCount, 1); // only the real "dog" token from the sentence
+      },
+    );
 
-    test('degrades gracefully with fewer than 3 decoy candidates available', () {
-      final challenge = service.buildChallenge(
-        targetWord: target,
-        otherEnglishTerms: ['cat'],
-        random: Random(3),
-      );
+    test(
+      'degrades gracefully with fewer than 3 decoy candidates available',
+      () {
+        final challenge = service.buildChallenge(
+          targetWord: target,
+          otherEnglishTerms: ['cat'],
+          random: Random(3),
+        );
 
-      expect(challenge.wordBank, hasLength(5)); // 4 tokens + 1 available decoy
-    });
+        expect(
+          challenge.wordBank,
+          hasLength(5),
+        ); // 4 tokens + 1 available decoy
+      },
+    );
 
     test('isAssembleCorrect only accepts the exact original order', () {
       final challenge = service.buildChallenge(
@@ -133,13 +142,13 @@ void main() {
         isTrue,
       );
       expect(
-        service.isAssembleCorrect(challenge, challenge.displayTokens.reversed.toList()),
+        service.isAssembleCorrect(
+          challenge,
+          challenge.displayTokens.reversed.toList(),
+        ),
         isFalse,
       );
-      expect(
-        service.isAssembleCorrect(challenge, ['The', 'dog']),
-        isFalse,
-      );
+      expect(service.isAssembleCorrect(challenge, ['The', 'dog']), isFalse);
     });
   });
 
@@ -188,27 +197,30 @@ void main() {
       expect(indices, List.of(indices)..sort());
     });
 
-    test('falls back to the assemble mechanism when no content word is eligible', () {
-      final target = _word(
-        id: 'word.understand',
-        englishTerm: 'understand',
-        difficulty: 3,
-        exampleSentenceEn: 'Do you understand?',
-      );
+    test(
+      'falls back to the assemble mechanism when no content word is eligible',
+      () {
+        final target = _word(
+          id: 'word.understand',
+          englishTerm: 'understand',
+          difficulty: 3,
+          exampleSentenceEn: 'Do you understand?',
+        );
 
-      final challenge = service.buildChallenge(
-        targetWord: target,
-        otherEnglishTerms: ['banana', 'orange', 'grape'],
-        random: Random(7),
-      );
+        final challenge = service.buildChallenge(
+          targetWord: target,
+          otherEnglishTerms: ['banana', 'orange', 'grape'],
+          random: Random(7),
+        );
 
-      // "Do"/"you" are function words, "understand?" is the last token
-      // (never blanked) -- nothing eligible, so it degrades instead of
-      // ever returning a blank with no valid options.
-      expect(challenge.blanks, isEmpty);
-      expect(challenge.style, SentenceExerciseStyle.emojiHint);
-      expect(challenge.wordBank, isNotEmpty);
-    });
+        // "Do"/"you" are function words, "understand?" is the last token
+        // (never blanked) -- nothing eligible, so it degrades instead of
+        // ever returning a blank with no valid options.
+        expect(challenge.blanks, isEmpty);
+        expect(challenge.style, SentenceExerciseStyle.emojiHint);
+        expect(challenge.wordBank, isNotEmpty);
+      },
+    );
 
     test('isBlankCorrect compares against the exact correct text', () {
       const blank = SentenceBlank(

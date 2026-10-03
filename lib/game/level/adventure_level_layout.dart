@@ -28,8 +28,18 @@ class AdventureLevelLayout {
     final right = screenSize.x * 0.95;
     return AdventureLevelLayout(
       platforms: [
-        Platform(id: 'high', left: left, right: right, top: groundTop - highOffset),
-        Platform(id: 'mid', left: left, right: right, top: groundTop - midOffset),
+        Platform(
+          id: 'high',
+          left: left,
+          right: right,
+          top: groundTop - highOffset,
+        ),
+        Platform(
+          id: 'mid',
+          left: left,
+          right: right,
+          top: groundTop - midOffset,
+        ),
         Platform(id: 'ground', left: 0, right: screenSize.x, top: groundTop),
       ],
     );

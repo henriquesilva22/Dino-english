@@ -197,8 +197,19 @@ class _StatChip extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('$icon $label', style: theme.textTheme.labelSmall?.copyWith(color: NeonColors.textSecondary)),
-            Text(value, style: theme.textTheme.titleMedium?.copyWith(color: color, fontWeight: FontWeight.bold)),
+            Text(
+              '$icon $label',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: NeonColors.textSecondary,
+              ),
+            ),
+            Text(
+              value,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
       ),
@@ -218,7 +229,10 @@ class _MasteryLevelBar extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('$count', style: const TextStyle(color: NeonColors.textSecondary, fontSize: 10)),
+        Text(
+          '$count',
+          style: const TextStyle(color: NeonColors.textSecondary, fontSize: 10),
+        ),
         const SizedBox(height: 4),
         Container(
           width: 20,
@@ -229,7 +243,10 @@ class _MasteryLevelBar extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text('$level', style: const TextStyle(color: NeonColors.textSecondary, fontSize: 10)),
+        Text(
+          '$level',
+          style: const TextStyle(color: NeonColors.textSecondary, fontSize: 10),
+        ),
       ],
     );
   }

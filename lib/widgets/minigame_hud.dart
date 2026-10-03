@@ -11,7 +11,11 @@ import 'boss_health_bar.dart';
 import 'neon_border.dart';
 
 class MinigameHud extends ConsumerStatefulWidget {
-  const MinigameHud({required this.onExit, this.isBossFight = false, super.key});
+  const MinigameHud({
+    required this.onExit,
+    this.isBossFight = false,
+    super.key,
+  });
 
   final bool isBossFight;
   final VoidCallback onExit;

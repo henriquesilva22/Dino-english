@@ -24,8 +24,6 @@ final masteryStatsProvider = FutureProvider.autoDispose<WordMasteryStats>((
   return ref.watch(progressRepositoryProvider).fetchMasteryStats();
 });
 
-final eggProgressProvider = FutureProvider.autoDispose<EggProgressInfo>((
-  ref,
-) {
+final eggProgressProvider = FutureProvider.autoDispose<EggProgressInfo>((ref) {
   return ref.watch(progressRepositoryProvider).fetchEggProgress();
 });

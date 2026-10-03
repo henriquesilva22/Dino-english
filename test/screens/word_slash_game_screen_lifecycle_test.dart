@@ -55,7 +55,8 @@ class _GatedWordRepository implements WordRepository {
   Future<Word?> fetchWordById(String id) => _real.fetchWordById(id);
 
   @override
-  Future<List<DistractorCandidate>> fetchDistractorPool() => _real.fetchDistractorPool();
+  Future<List<DistractorCandidate>> fetchDistractorPool() =>
+      _real.fetchDistractorPool();
 }
 
 Future<AppDatabase> _seededDatabase() async {
@@ -63,11 +64,16 @@ Future<AppDatabase> _seededDatabase() async {
   await database
       .into(database.userProfile)
       .insertOnConflictUpdate(
-        UserProfileCompanion.insert(id: const Value(1), createdAt: DateTime(2026)),
+        UserProfileCompanion.insert(
+          id: const Value(1),
+          createdAt: DateTime(2026),
+        ),
       );
   await database
       .into(database.dinoEvolutionState)
-      .insertOnConflictUpdate(DinoEvolutionStateCompanion.insert(id: const Value(1)));
+      .insertOnConflictUpdate(
+        DinoEvolutionStateCompanion.insert(id: const Value(1)),
+      );
   for (var i = 0; i < 6; i++) {
     await database
         .into(database.words)
@@ -94,8 +100,11 @@ Widget _harness({
   return ProviderScope(
     overrides: [
       databaseProvider.overrideWithValue(database),
-      wordSlashSoundServiceProvider.overrideWithValue(_FakeWordSlashSoundService()),
-      if (wordRepository != null) wordRepositoryProvider.overrideWithValue(wordRepository),
+      wordSlashSoundServiceProvider.overrideWithValue(
+        _FakeWordSlashSoundService(),
+      ),
+      if (wordRepository != null)
+        wordRepositoryProvider.overrideWithValue(wordRepository),
     ],
     child: MaterialApp(
       home: Builder(
@@ -117,14 +126,15 @@ void main() {
     'leaving via the system back gesture stops the round and restores portrait orientation',
     (tester) async {
       final orientationCalls = <String>[];
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (
-        call,
-      ) async {
-        if (call.method == 'SystemChrome.setPreferredOrientations') {
-          orientationCalls.add(call.method);
-        }
-        return null;
-      });
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'SystemChrome.setPreferredOrientations') {
+            orientationCalls.add(call.method);
+          }
+          return null;
+        },
+      );
       addTearDown(() {
         tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
           SystemChannels.platform,
@@ -140,7 +150,11 @@ void main() {
       await tester.pump();
       // The initial word batch is a real (if fast, in-memory) DB round
       // trip -- pump until the loading spinner is gone.
-      for (var i = 0; i < 30 && find.byType(CircularProgressIndicator).evaluate().isNotEmpty; i++) {
+      for (
+        var i = 0;
+        i < 30 && find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
+        i++
+      ) {
         await tester.pump(const Duration(milliseconds: 50));
       }
       expect(find.byType(CircularProgressIndicator), findsNothing);
@@ -171,7 +185,9 @@ void main() {
       final gatedRepository = _GatedWordRepository(WordRepository(database))
         ..candidatePoolGate = Completer<void>();
 
-      await tester.pumpWidget(_harness(database: database, wordRepository: gatedRepository));
+      await tester.pumpWidget(
+        _harness(database: database, wordRepository: gatedRepository),
+      );
       await tester.tap(find.text('open'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));

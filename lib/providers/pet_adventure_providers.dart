@@ -16,8 +16,9 @@ class SelectedPetIdNotifier extends Notifier<String> {
 /// Which pet the player picked for the current session. In-memory only
 /// (not persisted to the database) -- see plan decision #3: adding this
 /// to `AppSettings` would require a schema migration, out of scope.
-final selectedPetIdProvider =
-    NotifierProvider<SelectedPetIdNotifier, String>(SelectedPetIdNotifier.new);
+final selectedPetIdProvider = NotifierProvider<SelectedPetIdNotifier, String>(
+  SelectedPetIdNotifier.new,
+);
 
 /// Shared sound service for Pet Adventure -- only read from
 /// navigation/tap-reachable code, never at app boot (see

@@ -1,8 +1,9 @@
 /// Category -> generic "situation" prompt / emoji, for
 /// [SentenceExerciseStyle.situationHint]/[SentenceExerciseStyle.emojiHint].
-/// Covers the 8 real categories in the seed data (`animals, colors,
-/// family, food, greetings, numbers, objects, verbs`); a fallback covers
-/// any category added later without this file needing an update.
+/// Covers the 15 real categories in the seed data (`animals, colors,
+/// family, food, greetings, numbers, objects, verbs, feelings, nature,
+/// people, places, adjectives, body, clothes`); a fallback covers any
+/// category added later without this file needing an update.
 const Map<String, String> _situationByCategory = {
   'animals': 'Você está falando sobre animais.',
   'colors': 'Você está descrevendo uma cor.',
@@ -12,6 +13,13 @@ const Map<String, String> _situationByCategory = {
   'numbers': 'Você está falando sobre números.',
   'objects': 'Você está falando sobre um objeto.',
   'verbs': 'Você está descrevendo uma ação.',
+  'feelings': 'Você está falando sobre sentimentos.',
+  'nature': 'Você está falando sobre a natureza.',
+  'people': 'Você está falando sobre pessoas.',
+  'places': 'Você está falando sobre um lugar.',
+  'adjectives': 'Você está descrevendo alguma coisa.',
+  'body': 'Você está falando sobre o corpo.',
+  'clothes': 'Você está falando sobre roupas.',
 };
 
 const Map<String, String> _emojiByCategory = {
@@ -23,6 +31,13 @@ const Map<String, String> _emojiByCategory = {
   'numbers': '🔢',
   'objects': '📦',
   'verbs': '🏃',
+  'feelings': '😊',
+  'nature': '🌳',
+  'people': '🧒',
+  'places': '🏫',
+  'adjectives': '✨',
+  'body': '✋',
+  'clothes': '👕',
 };
 
 String situationFor(String category) =>

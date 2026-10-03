@@ -116,8 +116,9 @@ class MinigameVictoryOverlay extends ConsumerWidget {
                         resetMinigameState(ref, isBossFight: isBossFight);
                         Navigator.of(context).pushReplacement(
                           MaterialPageRoute(
-                            builder: (_) =>
-                                PetAdventureGameScreen(isBossFight: isBossFight),
+                            builder: (_) => PetAdventureGameScreen(
+                              isBossFight: isBossFight,
+                            ),
                           ),
                         );
                       }),

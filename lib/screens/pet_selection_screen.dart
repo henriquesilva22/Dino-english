@@ -60,13 +60,12 @@ class PetSelectionScreen extends ConsumerWidget {
                     horizontal: 16,
                     vertical: 8,
                   ),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 4,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        childAspectRatio: 0.82,
-                      ),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: 0.82,
+                  ),
                   itemCount: kPetCatalog.length,
                   itemBuilder: (context, index) {
                     final pet = kPetCatalog[index];
@@ -94,8 +93,9 @@ class PetSelectionScreen extends ConsumerWidget {
                         resetMinigameState(ref, isBossFight: false);
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) =>
-                                const PetAdventureGameScreen(isBossFight: false),
+                            builder: (_) => const PetAdventureGameScreen(
+                              isBossFight: false,
+                            ),
                           ),
                         );
                       }),

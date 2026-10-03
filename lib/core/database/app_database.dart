@@ -2,7 +2,9 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
 import 'tables/app_settings_table.dart';
+import 'tables/companion_state_table.dart';
 import 'tables/daily_activity_log_table.dart';
+import 'tables/dino_memories_table.dart';
 import 'tables/dino_evolution_state_table.dart';
 import 'tables/exercise_attempts_table.dart';
 import 'tables/seed_metadata_table.dart';
@@ -22,6 +24,8 @@ part 'app_database.g.dart';
     DinoEvolutionState,
     AppSettings,
     SeedMetadata,
+    DinoMemories,
+    CompanionStates,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -31,12 +35,25 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'dino_english'));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
+    },
+    onUpgrade: (m, from, to) async {
+      // v2 (DinoBrain): multi-sense words + the Dino's conversation
+      // memory. The seed loader re-writes `senses_json` because the
+      // seed version was bumped alongside this migration.
+      if (from < 2) {
+        await m.addColumn(words, words.sensesJson);
+        await m.createTable(dinoMemories);
+      }
+      // v3: the virtual companion's needs (hunger, thirst, energy...).
+      if (from < 3) {
+        await m.createTable(companionStates);
+      }
     },
   );
 }

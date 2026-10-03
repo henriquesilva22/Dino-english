@@ -15,6 +15,13 @@ class Words extends Table {
   IntColumn get recommendedLevel => integer()();
   TextColumn get exampleSentenceEn => text()();
   TextColumn get exampleSentencePt => text()();
+
+  /// Optional JSON list of every sense of the word (`light` -> luz /
+  /// leve), each `{pt, pos, example_en, example_pt}`. The first entry is
+  /// the primary sense and always matches [portugueseTranslation], which
+  /// stays the single answer quizzes grade against. Null for words with
+  /// only one sense. Added in schema v2.
+  TextColumn get sensesJson => text().nullable()();
   TextColumn get pronunciationAudioAsset => text().nullable()();
   TextColumn get imageAsset => text().nullable()();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();

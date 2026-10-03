@@ -58,7 +58,10 @@ Future<AppDatabase> _seededDatabase() async {
   await database
       .into(database.userProfile)
       .insertOnConflictUpdate(
-        UserProfileCompanion.insert(id: const Value(1), createdAt: DateTime(2026)),
+        UserProfileCompanion.insert(
+          id: const Value(1),
+          createdAt: DateTime(2026),
+        ),
       );
   await database
       .into(database.dinoEvolutionState)
@@ -72,7 +75,9 @@ Widget _wrap(AppDatabase database, StudySessionState state) {
   return ProviderScope(
     overrides: [
       databaseProvider.overrideWithValue(database),
-      studySessionProvider.overrideWith(() => _FixedStudySessionController(state)),
+      studySessionProvider.overrideWith(
+        () => _FixedStudySessionController(state),
+      ),
       speechServiceProvider.overrideWithValue(_FakeSpeechService()),
     ],
     child: MaterialApp(
@@ -109,7 +114,11 @@ void main() {
   testWidgets('shows PALAVRA NOVA for a new word with translation visible', (
     tester,
   ) async {
-    final question = StudyQuestion(word: _word(), options: const [], isNewWord: true);
+    final question = StudyQuestion(
+      word: _word(),
+      options: const [],
+      isNewWord: true,
+    );
     final state = StudySessionState(
       items: [question],
       isLoading: false,
@@ -131,7 +140,11 @@ void main() {
   testWidgets(
     'shows MODO IMERSÃO for a known word with translations hidden behind reveal buttons',
     (tester) async {
-      final question = StudyQuestion(word: _word(), options: const [], isNewWord: false);
+      final question = StudyQuestion(
+        word: _word(),
+        options: const [],
+        isNewWord: false,
+      );
       final state = StudySessionState(items: [question], isLoading: false);
 
       await tester.pumpWidget(_wrap(database, state));
@@ -150,7 +163,11 @@ void main() {
   testWidgets('tapping Ver tradução reveals the word translation only', (
     tester,
   ) async {
-    final question = StudyQuestion(word: _word(), options: const [], isNewWord: false);
+    final question = StudyQuestion(
+      word: _word(),
+      options: const [],
+      isNewWord: false,
+    );
     final state = StudySessionState(items: [question], isLoading: false);
 
     await tester.pumpWidget(_wrap(database, state));
@@ -164,20 +181,25 @@ void main() {
     await _flushDriftTimers(tester);
   });
 
-  testWidgets('tapping Ver tradução da frase reveals the sentence translation only', (
-    tester,
-  ) async {
-    final question = StudyQuestion(word: _word(), options: const [], isNewWord: false);
-    final state = StudySessionState(items: [question], isLoading: false);
+  testWidgets(
+    'tapping Ver tradução da frase reveals the sentence translation only',
+    (tester) async {
+      final question = StudyQuestion(
+        word: _word(),
+        options: const [],
+        isNewWord: false,
+      );
+      final state = StudySessionState(items: [question], isLoading: false);
 
-    await tester.pumpWidget(_wrap(database, state));
-    await tester.tap(find.text('Ver tradução da frase'));
-    await tester.pump();
+      await tester.pumpWidget(_wrap(database, state));
+      await tester.tap(find.text('Ver tradução da frase'));
+      await tester.pump();
 
-    expect(find.text('Eu como uma maçã todos os dias.'), findsOneWidget);
-    expect(find.text('maçã'), findsNothing);
-    expect(find.text('Ver tradução'), findsOneWidget);
+      expect(find.text('Eu como uma maçã todos os dias.'), findsOneWidget);
+      expect(find.text('maçã'), findsNothing);
+      expect(find.text('Ver tradução'), findsOneWidget);
 
-    await _flushDriftTimers(tester);
-  });
+      await _flushDriftTimers(tester);
+    },
+  );
 }

@@ -12,6 +12,7 @@ import 'words_table.dart';
 @TableIndex(name: 'idx_exercise_attempts_attempted_at', columns: {#attemptedAt})
 class ExerciseAttempts extends Table {
   IntColumn get id => integer().autoIncrement()();
+
   /// Nullable on purpose: not every exercise type maps to exactly one
   /// word (e.g. a future matching/grammar-only item).
   TextColumn get wordId => text().nullable().references(Words, #id)();

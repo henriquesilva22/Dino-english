@@ -24,7 +24,10 @@ Future<AppDatabase> _seededDatabase() async {
   await database
       .into(database.userProfile)
       .insertOnConflictUpdate(
-        UserProfileCompanion.insert(id: const Value(1), createdAt: DateTime(2026)),
+        UserProfileCompanion.insert(
+          id: const Value(1),
+          createdAt: DateTime(2026),
+        ),
       );
   await database
       .into(database.dinoEvolutionState)
@@ -60,86 +63,97 @@ void main() {
     return subscription.read();
   }
 
-  test('review mix excludes a brand-new word when enough weak words already fill the session', () async {
-    // 10 already-seen, weak words -- enough to fill count=10 on their own
-    // -- plus 1 word with no progress row at all (a genuinely "new" word,
-    // which Estudar would readily include but Provas should not, since
-    // SessionKind.review's mix targets 0% new).
-    for (var i = 0; i < 10; i++) {
-      final id = 'weak$i';
-      await database.into(database.words).insert(_word(id));
+  test(
+    'review mix excludes a brand-new word when enough weak words already fill the session',
+    () async {
+      // 10 already-seen, weak words -- enough to fill count=10 on their own
+      // -- plus 1 word with no progress row at all (a genuinely "new" word,
+      // which Estudar would readily include but Provas should not, since
+      // SessionKind.review's mix targets 0% new).
+      for (var i = 0; i < 10; i++) {
+        final id = 'weak$i';
+        await database.into(database.words).insert(_word(id));
+        await database
+            .into(database.wordProgress)
+            .insert(
+              WordProgressCompanion.insert(
+                wordId: id,
+                lastResultCorrect: const Value(false),
+              ),
+            );
+      }
+      await database.into(database.words).insert(_word('brand_new'));
+
+      final state = await awaitLoaded();
+
+      expect(state.items.map((q) => q.word.id), isNot(contains('brand_new')));
+    },
+  );
+
+  test(
+    'submitAnswer records exam_multiple_choice/exam exercise attempts',
+    () async {
+      await database.into(database.words).insert(_word('weak0'));
       await database
           .into(database.wordProgress)
           .insert(
             WordProgressCompanion.insert(
-              wordId: id,
+              wordId: 'weak0',
               lastResultCorrect: const Value(false),
             ),
           );
-    }
-    await database.into(database.words).insert(_word('brand_new'));
 
-    final state = await awaitLoaded();
+      final loaded = await awaitLoaded();
+      expect(loaded.items, isNotEmpty);
+      final notifier = container.read(examSessionProvider.notifier);
+      final correctWordId = loaded.items.first.word.id;
 
-    expect(state.items.map((q) => q.word.id), isNot(contains('brand_new')));
-  });
+      notifier.selectOption(correctWordId);
+      await notifier.submitAnswer();
 
-  test('submitAnswer records exam_multiple_choice/exam exercise attempts', () async {
-    await database.into(database.words).insert(_word('weak0'));
-    await database
-        .into(database.wordProgress)
-        .insert(
-          WordProgressCompanion.insert(
-            wordId: 'weak0',
-            lastResultCorrect: const Value(false),
-          ),
-        );
+      final state = container.read(examSessionProvider);
+      expect(state.isAnswered, isTrue);
+      expect(state.sessionCorrectCount, 1);
+      expect(state.sessionXpEarned, greaterThan(0));
 
-    final loaded = await awaitLoaded();
-    expect(loaded.items, isNotEmpty);
-    final notifier = container.read(examSessionProvider.notifier);
-    final correctWordId = loaded.items.first.word.id;
+      final attempts = await database.select(database.exerciseAttempts).get();
+      expect(attempts, hasLength(1));
+      expect(attempts.single.exerciseType, 'exam_multiple_choice');
+      expect(attempts.single.sessionKind, 'exam');
+      expect(attempts.single.wasCorrect, isTrue);
+    },
+  );
 
-    notifier.selectOption(correctWordId);
-    await notifier.submitAnswer();
+  test(
+    'nextQuestion advances only after the current question is answered',
+    () async {
+      await database.into(database.words).insert(_word('weak0'));
+      await database
+          .into(database.wordProgress)
+          .insert(
+            WordProgressCompanion.insert(
+              wordId: 'weak0',
+              lastResultCorrect: const Value(false),
+            ),
+          );
+      await awaitLoaded();
+      final notifier = container.read(examSessionProvider.notifier);
 
-    final state = container.read(examSessionProvider);
-    expect(state.isAnswered, isTrue);
-    expect(state.sessionCorrectCount, 1);
-    expect(state.sessionXpEarned, greaterThan(0));
+      notifier.nextQuestion(); // not answered yet -- no-op
+      expect(container.read(examSessionProvider).currentIndex, 0);
 
-    final attempts = await database.select(database.exerciseAttempts).get();
-    expect(attempts, hasLength(1));
-    expect(attempts.single.exerciseType, 'exam_multiple_choice');
-    expect(attempts.single.sessionKind, 'exam');
-    expect(attempts.single.wasCorrect, isTrue);
-  });
+      notifier.selectOption(
+        container.read(examSessionProvider).currentQuestion.word.id,
+      );
+      await notifier.submitAnswer();
+      notifier.nextQuestion();
 
-  test('nextQuestion advances only after the current question is answered', () async {
-    await database.into(database.words).insert(_word('weak0'));
-    await database
-        .into(database.wordProgress)
-        .insert(
-          WordProgressCompanion.insert(
-            wordId: 'weak0',
-            lastResultCorrect: const Value(false),
-          ),
-        );
-    await awaitLoaded();
-    final notifier = container.read(examSessionProvider.notifier);
-
-    notifier.nextQuestion(); // not answered yet -- no-op
-    expect(container.read(examSessionProvider).currentIndex, 0);
-
-    notifier.selectOption(container.read(examSessionProvider).currentQuestion.word.id);
-    await notifier.submitAnswer();
-    notifier.nextQuestion();
-
-    expect(container.read(examSessionProvider).currentIndex, 1);
-    // WordSelectionService now always fills a batch to its target size
-    // (repeating the one seeded word via maintenance cycling -- see
-    // word_selection_service_test.dart), so one answered question out of
-    // a full batch does not complete the round.
-    expect(container.read(examSessionProvider).isComplete, isFalse);
-  });
+      expect(container.read(examSessionProvider).currentIndex, 1);
+      // WordSelectionService now always fills a batch to its target size
+      // (repeating the one seeded word via maintenance cycling -- see
+      // word_selection_service_test.dart), so one answered question out of
+      // a full batch does not complete the round.
+      expect(container.read(examSessionProvider).isComplete, isFalse);
+    },
+  );
 }

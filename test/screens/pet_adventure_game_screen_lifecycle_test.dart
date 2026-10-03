@@ -51,7 +51,10 @@ Future<AppDatabase> _seededDatabase() async {
   await database
       .into(database.userProfile)
       .insertOnConflictUpdate(
-        UserProfileCompanion.insert(id: const Value(1), createdAt: DateTime(2026)),
+        UserProfileCompanion.insert(
+          id: const Value(1),
+          createdAt: DateTime(2026),
+        ),
       );
   await database
       .into(database.words)
@@ -85,7 +88,8 @@ Widget _harness({
           body: ElevatedButton(
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => const PetAdventureGameScreen(isBossFight: false),
+                builder: (_) =>
+                    const PetAdventureGameScreen(isBossFight: false),
               ),
             ),
             child: const Text('open'),

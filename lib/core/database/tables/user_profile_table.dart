@@ -12,6 +12,7 @@ class UserProfile extends Table {
   IntColumn get currentLevel => integer().withDefault(const Constant(1))();
   IntColumn get currentStreakDays => integer().withDefault(const Constant(0))();
   IntColumn get longestStreakDays => integer().withDefault(const Constant(0))();
+
   /// Local calendar date (`YYYY-MM-DD`) of the last study day, stored as
   /// text to avoid timezone-boundary bugs when comparing "same day".
   TextColumn get lastStudyDate => text().nullable()();

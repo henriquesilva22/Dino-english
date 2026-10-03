@@ -23,7 +23,9 @@ class PetCatalogTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = selected ? NeonColors.cyan : NeonColors.cyan.withValues(alpha: 0.25);
+    final color = selected
+        ? NeonColors.cyan
+        : NeonColors.cyan.withValues(alpha: 0.25);
 
     final tile = NeonBorder(
       color: color,

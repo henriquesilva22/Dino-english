@@ -5,9 +5,11 @@ import 'package:drift/drift.dart';
 class AppSettings extends Table {
   IntColumn get id => integer()();
   BoolColumn get soundEnabled => boolean().withDefault(const Constant(true))();
-  IntColumn get dailyGoalExercises => integer().withDefault(const Constant(10))();
+  IntColumn get dailyGoalExercises =>
+      integer().withDefault(const Constant(10))();
   TextColumn get themeMode => text().withDefault(const Constant('system'))();
-  BoolColumn get onboardingCompleted => boolean().withDefault(const Constant(false))();
+  BoolColumn get onboardingCompleted =>
+      boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};

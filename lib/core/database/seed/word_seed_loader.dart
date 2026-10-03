@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/services.dart' show AssetBundle, rootBundle;
 
 import '../app_database.dart';
@@ -26,7 +27,13 @@ class WordSeedLoader {
   final String _assetPath;
 
   Future<void> seedIfNeeded() async {
-    final raw = await _assetBundle.loadString(_assetPath);
+    // Not loadString(): above 50 KB it decodes in a background isolate,
+    // which is overkill for ~70 KB and never completes under a widget
+    // test's fake async. Decoding here is a sub-millisecond job.
+    final bytes = await _assetBundle.load(_assetPath);
+    final raw = utf8.decode(
+      bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
+    );
     final json = jsonDecode(raw) as Map<String, dynamic>;
     final seedVersion = json['seed_version'] as String;
     final wordsJson = (json['words'] as List).cast<Map<String, dynamic>>();
@@ -69,6 +76,11 @@ class WordSeedLoader {
       recommendedLevel: json['recommended_level'] as int,
       exampleSentenceEn: json['example_sentence_en'] as String,
       exampleSentencePt: json['example_sentence_pt'] as String,
+      // Always written (null included) so an upsert also clears senses a
+      // newer seed removed.
+      sensesJson: Value(
+        json['senses'] == null ? null : jsonEncode(json['senses']),
+      ),
     );
   }
 }

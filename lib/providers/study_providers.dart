@@ -273,14 +273,20 @@ class StudySessionController extends Notifier<StudySessionState> {
   }
 
   void selectOption(String wordId) {
-    if (state.isLearningStep || state.isAnswered || state.isLoading || state.isComplete) {
+    if (state.isLearningStep ||
+        state.isAnswered ||
+        state.isLoading ||
+        state.isComplete) {
       return;
     }
     state = state.copyWith(selectedWordId: wordId);
   }
 
   Future<void> submitAnswer() async {
-    if (state.isLearningStep || state.isAnswered || state.isLoading || state.isComplete) {
+    if (state.isLearningStep ||
+        state.isAnswered ||
+        state.isLoading ||
+        state.isComplete) {
       return;
     }
     final selectedWordId = state.selectedWordId;

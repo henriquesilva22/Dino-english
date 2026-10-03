@@ -27,8 +27,7 @@ class PrimaryStudyButton extends ConsumerWidget {
       subtitle: subtitle,
       color: NeonColors.cyan,
       icon: const Text('📚', style: TextStyle(fontSize: 30)),
-      onTap: () =>
-          ref.read(selectedTabIndexProvider.notifier).select(1),
+      onTap: () => ref.read(selectedTabIndexProvider.notifier).select(1),
     );
   }
 }

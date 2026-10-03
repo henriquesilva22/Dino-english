@@ -28,7 +28,9 @@ class StudyScreen extends ConsumerWidget {
     return Scaffold(
       body: NeonBackground(
         child: SafeArea(
-          child: started ? const _StudySessionContent() : const StudySetupView(),
+          child: started
+              ? const _StudySessionContent()
+              : const StudySetupView(),
         ),
       ),
     );
@@ -272,10 +274,18 @@ class _SessionSummary extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
           if (correct.isNotEmpty)
-            _ResultList(title: '✅ Acertos', color: NeonColors.green, attempts: correct),
+            _ResultList(
+              title: '✅ Acertos',
+              color: NeonColors.green,
+              attempts: correct,
+            ),
           if (wrong.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _ResultList(title: '❌ Erros', color: NeonColors.red, attempts: wrong),
+            _ResultList(
+              title: '❌ Erros',
+              color: NeonColors.red,
+              attempts: wrong,
+            ),
           ],
           const SizedBox(height: 20),
           profileAsync.when(
@@ -287,7 +297,8 @@ class _SessionSummary extends ConsumerWidget {
           GlowButton(
             label: 'Continuar',
             color: NeonColors.green,
-            onTap: () => ref.read(studySessionProvider.notifier).startNewBlock(),
+            onTap: () =>
+                ref.read(studySessionProvider.notifier).startNewBlock(),
           ),
           const SizedBox(height: 10),
           GlowButton(

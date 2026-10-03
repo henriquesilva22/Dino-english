@@ -43,11 +43,16 @@ Future<AppDatabase> _seededDatabase(int wordCount) async {
   await database
       .into(database.userProfile)
       .insertOnConflictUpdate(
-        UserProfileCompanion.insert(id: const Value(1), createdAt: DateTime(2026)),
+        UserProfileCompanion.insert(
+          id: const Value(1),
+          createdAt: DateTime(2026),
+        ),
       );
   await database
       .into(database.dinoEvolutionState)
-      .insertOnConflictUpdate(DinoEvolutionStateCompanion.insert(id: const Value(1)));
+      .insertOnConflictUpdate(
+        DinoEvolutionStateCompanion.insert(id: const Value(1)),
+      );
   for (var i = 0; i < wordCount; i++) {
     await database.into(database.words).insert(_word('slashword$i'));
   }
@@ -83,14 +88,19 @@ List<String> _findCleanPairIds(
 }) {
   for (var attempt = 0; attempt < 20; attempt++) {
     final state = container.read(wordSlashControllerProvider);
-    final hitPadding = WordSlashRoundConfig.forRound(state.roundNumber).hitPadding;
-    final minSafeDistance = WordSlashRoundConfig.bubbleRadius * 2 + hitPadding + 1;
+    final hitPadding = WordSlashRoundConfig.forRound(
+      state.roundNumber,
+    ).hitPadding;
+    final minSafeDistance =
+        WordSlashRoundConfig.bubbleRadius * 2 + hitPadding + 1;
     final clean = <String>[];
     for (final pairId in state.bubbles.map((b) => b.pairId).toSet()) {
       final target = state.bubbles.where((b) => b.pairId == pairId).toList();
       final others = state.bubbles.where((b) => b.pairId != pairId);
       final safe = target.every(
-        (t) => others.every((o) => (o.position - t.position).distance > minSafeDistance),
+        (t) => others.every(
+          (o) => (o.position - t.position).distance > minSafeDistance,
+        ),
       );
       if (safe) clean.add(pairId);
     }
@@ -127,7 +137,9 @@ void main() {
     container = ProviderContainer(
       overrides: [
         databaseProvider.overrideWithValue(database),
-        wordSlashSoundServiceProvider.overrideWithValue(_FakeWordSlashSoundService()),
+        wordSlashSoundServiceProvider.overrideWithValue(
+          _FakeWordSlashSoundService(),
+        ),
       ],
     );
   }
@@ -151,90 +163,102 @@ void main() {
     return container.read(wordSlashControllerProvider);
   }
 
-  test('a correct pair records exactly one exercise_attempts row and grants exactly the fixed XP, not per-frame or doubled', () async {
-    await setUpWith(6);
-    await awaitLoaded();
-    final notifier = container.read(wordSlashControllerProvider.notifier);
-    final pairId = _findCleanPairIds(notifier, container, count: 1).single;
+  test(
+    'a correct pair records exactly one exercise_attempts row and grants exactly the fixed XP, not per-frame or doubled',
+    () async {
+      await setUpWith(6);
+      await awaitLoaded();
+      final notifier = container.read(wordSlashControllerProvider.notifier);
+      final pairId = _findCleanPairIds(notifier, container, count: 1).single;
 
-    _swipeThroughPair(notifier, container, pairId);
-    // resolvePair's XP/history write is awaited internally via
-    // unawaited(), so give it a turn to actually land before asserting.
-    await Future<void>.delayed(Duration.zero);
-    // A couple of harmless extra frames -- must not record anything more.
-    notifier.tick(const Duration(milliseconds: 16), const Size(5000, 5000));
-    notifier.tick(const Duration(milliseconds: 16), const Size(5000, 5000));
-    await Future<void>.delayed(Duration.zero);
+      _swipeThroughPair(notifier, container, pairId);
+      // resolvePair's XP/history write is awaited internally via
+      // unawaited(), so give it a turn to actually land before asserting.
+      await Future<void>.delayed(Duration.zero);
+      // A couple of harmless extra frames -- must not record anything more.
+      notifier.tick(const Duration(milliseconds: 16), const Size(5000, 5000));
+      notifier.tick(const Duration(milliseconds: 16), const Size(5000, 5000));
+      await Future<void>.delayed(Duration.zero);
 
-    final attempts = await database.select(database.exerciseAttempts).get();
-    expect(attempts, hasLength(1));
-    expect(attempts.single.exerciseType, 'word_slash');
-    expect(attempts.single.sessionKind, 'review');
-    expect(attempts.single.wasCorrect, isTrue);
-    expect(attempts.single.xpAwarded, 5);
+      final attempts = await database.select(database.exerciseAttempts).get();
+      expect(attempts, hasLength(1));
+      expect(attempts.single.exerciseType, 'word_slash');
+      expect(attempts.single.sessionKind, 'review');
+      expect(attempts.single.wasCorrect, isTrue);
+      expect(attempts.single.xpAwarded, 5);
 
-    final profile = await database.select(database.userProfile).getSingle();
-    expect(profile.totalXp, 5);
-  });
+      final profile = await database.select(database.userProfile).getSingle();
+      expect(profile.totalXp, 5);
+    },
+  );
 
-  test('a wrong pair records an attempt with wordId null and zero XP', () async {
-    await setUpWith(6);
-    await awaitLoaded();
-    final notifier = container.read(wordSlashControllerProvider.notifier);
-    final pairIds = _findCleanPairIds(notifier, container, count: 2);
-    final state = container.read(wordSlashControllerProvider);
-    final mismatched = [
-      state.bubbles.firstWhere((b) => b.pairId == pairIds[0]),
-      state.bubbles.firstWhere((b) => b.pairId == pairIds[1]),
-    ];
+  test(
+    'a wrong pair records an attempt with wordId null and zero XP',
+    () async {
+      await setUpWith(6);
+      await awaitLoaded();
+      final notifier = container.read(wordSlashControllerProvider.notifier);
+      final pairIds = _findCleanPairIds(notifier, container, count: 2);
+      final state = container.read(wordSlashControllerProvider);
+      final mismatched = [
+        state.bubbles.firstWhere((b) => b.pairId == pairIds[0]),
+        state.bubbles.firstWhere((b) => b.pairId == pairIds[1]),
+      ];
 
-    notifier.beginSwipe();
-    for (final bubble in mismatched) {
-      notifier.registerSwipeSegment(
-        bubble.position - const Offset(1, 1),
-        bubble.position + const Offset(1, 1),
-      );
-    }
-    notifier.endSwipe();
-    await Future<void>.delayed(Duration.zero);
+      notifier.beginSwipe();
+      for (final bubble in mismatched) {
+        notifier.registerSwipeSegment(
+          bubble.position - const Offset(1, 1),
+          bubble.position + const Offset(1, 1),
+        );
+      }
+      notifier.endSwipe();
+      await Future<void>.delayed(Duration.zero);
 
-    final attempts = await database.select(database.exerciseAttempts).get();
-    expect(attempts, hasLength(1));
-    expect(attempts.single.wordId, isNull);
-    expect(attempts.single.wasCorrect, isFalse);
-    expect(attempts.single.xpAwarded, 0);
-  });
+      final attempts = await database.select(database.exerciseAttempts).get();
+      expect(attempts, hasLength(1));
+      expect(attempts.single.wordId, isNull);
+      expect(attempts.single.wasCorrect, isFalse);
+      expect(attempts.single.xpAwarded, 0);
+    },
+  );
 
-  test('endSession stops the round -- a tick afterwards changes nothing', () async {
-    await setUpWith(6);
-    await awaitLoaded();
-    final notifier = container.read(wordSlashControllerProvider.notifier);
-    final before = container.read(wordSlashControllerProvider);
+  test(
+    'endSession stops the round -- a tick afterwards changes nothing',
+    () async {
+      await setUpWith(6);
+      await awaitLoaded();
+      final notifier = container.read(wordSlashControllerProvider.notifier);
+      final before = container.read(wordSlashControllerProvider);
 
-    await notifier.endSession();
-    notifier.tick(const Duration(seconds: 1), const Size(5000, 5000));
+      await notifier.endSession();
+      notifier.tick(const Duration(seconds: 1), const Size(5000, 5000));
 
-    final after = container.read(wordSlashControllerProvider);
-    expect(after.sessionPhase, WordSlashSessionPhase.ending);
-    expect(after.roundTimeRemaining, before.roundTimeRemaining);
-    expect(after.bubbles, before.bubbles);
-  });
+      final after = container.read(wordSlashControllerProvider);
+      expect(after.sessionPhase, WordSlashSessionPhase.ending);
+      expect(after.roundTimeRemaining, before.roundTimeRemaining);
+      expect(after.bubbles, before.bubbles);
+    },
+  );
 
-  test('a swipe after endSession is a no-op -- no attempt is recorded', () async {
-    await setUpWith(6);
-    await awaitLoaded();
-    final notifier = container.read(wordSlashControllerProvider.notifier);
-    // Pick the target *before* ending the session -- once ended, tick()
-    // (which the retry loop in _findCleanPairIds relies on) is a no-op.
-    final pairId = _findCleanPairIds(notifier, container, count: 1).single;
+  test(
+    'a swipe after endSession is a no-op -- no attempt is recorded',
+    () async {
+      await setUpWith(6);
+      await awaitLoaded();
+      final notifier = container.read(wordSlashControllerProvider.notifier);
+      // Pick the target *before* ending the session -- once ended, tick()
+      // (which the retry loop in _findCleanPairIds relies on) is a no-op.
+      final pairId = _findCleanPairIds(notifier, container, count: 1).single;
 
-    await notifier.endSession();
-    _swipeThroughPair(notifier, container, pairId);
-    await Future<void>.delayed(Duration.zero);
+      await notifier.endSession();
+      _swipeThroughPair(notifier, container, pairId);
+      await Future<void>.delayed(Duration.zero);
 
-    final attempts = await database.select(database.exerciseAttempts).get();
-    expect(attempts, isEmpty);
-  });
+      final attempts = await database.select(database.exerciseAttempts).get();
+      expect(attempts, isEmpty);
+    },
+  );
 
   test(
     'closing the old subscription and starting a new one creates a fresh, higher sessionId -- proof '
@@ -242,7 +266,9 @@ void main() {
     () async {
       await setUpWith(6);
       await awaitLoaded();
-      final firstId = container.read(wordSlashControllerProvider.notifier).sessionId;
+      final firstId = container
+          .read(wordSlashControllerProvider.notifier)
+          .sessionId;
 
       // Mirrors what really happens on screen exit/reentry: the widget's
       // `ref.watch` unsubscribes (listener count hits zero), `.autoDispose`
@@ -265,7 +291,9 @@ void main() {
       while (subscription.read().roundTimeRemaining == null) {
         await Future<void>.delayed(Duration.zero);
       }
-      final secondId = container.read(wordSlashControllerProvider.notifier).sessionId;
+      final secondId = container
+          .read(wordSlashControllerProvider.notifier)
+          .sessionId;
 
       expect(secondId, greaterThan(firstId));
     },

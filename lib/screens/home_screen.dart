@@ -11,6 +11,7 @@ import '../widgets/home/sentence_builder_card.dart';
 import '../widgets/home/word_slash_card.dart';
 import '../widgets/mastery_progress_card.dart';
 import '../widgets/neon_background.dart';
+import 'dino_chat_screen.dart';
 import 'exam_screen.dart';
 import 'sentence_builder_screen.dart';
 import 'word_slash_game_screen.dart';
@@ -68,7 +69,15 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const DinoChatCard(),
+                    DinoChatCard(
+                      onTap: () => SingleNavigationGuard.run(
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const DinoChatScreen(),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],

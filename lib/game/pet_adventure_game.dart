@@ -50,7 +50,8 @@ enum GameSessionPhase { starting, running, ending, disposed }
 /// Riverpod knowledge -- it only reports collected words through the two
 /// constructor callbacks, so the screen/provider layer decides what to do
 /// with them (see `lib/providers/minigame_providers.dart`).
-class PetAdventureGame extends FlameGame with HasCollisionDetection, TapCallbacks {
+class PetAdventureGame extends FlameGame
+    with HasCollisionDetection, TapCallbacks {
   PetAdventureGame({
     required this.pet,
     required this.correctWordPool,
@@ -120,8 +121,9 @@ class PetAdventureGame extends FlameGame with HasCollisionDetection, TapCallback
   /// The active pacing config: the boss fight ramps up as its HP drops
   /// (see `DifficultyConfig.bossBand`), the normal round always uses
   /// [difficulty] unchanged.
-  DifficultyConfig get activeDifficulty =>
-      bossState == null ? difficulty : DifficultyConfig.bossBand(bossState!.band);
+  DifficultyConfig get activeDifficulty => bossState == null
+      ? difficulty
+      : DifficultyConfig.bossBand(bossState!.band);
 
   late final PetComponent dino;
   late final PetDefinition _bossPet;
@@ -220,7 +222,8 @@ class PetAdventureGame extends FlameGame with HasCollisionDetection, TapCallback
   /// call more than once, and safe to call from a round-end listener even
   /// though the engine may already be paused.
   Future<void> endSession() async {
-    if (_phase == GameSessionPhase.ending || _phase == GameSessionPhase.disposed) {
+    if (_phase == GameSessionPhase.ending ||
+        _phase == GameSessionPhase.disposed) {
       return;
     }
     _phase = GameSessionPhase.ending;
@@ -340,7 +343,9 @@ class PetAdventureGame extends FlameGame with HasCollisionDetection, TapCallback
     word.removeFromParent();
 
     if (isCorrect) {
-      world.add(CollectBurstComponent.sparkle(position: center, random: _random));
+      world.add(
+        CollectBurstComponent.sparkle(position: center, random: _random),
+      );
       world.add(
         FloatingTextComponent(
           text: '+${MinigameRoundState.xpPerCorrectWord} XP',
@@ -351,9 +356,13 @@ class PetAdventureGame extends FlameGame with HasCollisionDetection, TapCallback
       dino.reactToCorrect();
       sound.play(AdventureSfx.correct);
       onCollectCorrect(word.word!);
-      _damageBoss(BossFightState.damageForWordDifficulty(word.word!.difficulty));
+      _damageBoss(
+        BossFightState.damageForWordDifficulty(word.word!.difficulty),
+      );
     } else {
-      world.add(CollectBurstComponent.impact(position: center, random: _random));
+      world.add(
+        CollectBurstComponent.impact(position: center, random: _random),
+      );
       dino.reactToIncorrect();
       sound.play(AdventureSfx.incorrect);
       unawaited(HapticFeedback.mediumImpact());

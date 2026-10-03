@@ -16,9 +16,32 @@ class SentenceBuilderService {
   static const int _blankOptionCount = 3; // correct + 2 distractors
 
   static const Set<String> _functionWords = {
-    'a', 'an', 'the', 'is', 'are', 'am', 'was', 'were', 'do', 'does', 'did',
-    'i', 'you', 'he', 'she', 'it', 'we', 'they', 'to', 'in', 'on', 'at',
-    'of', 'and', 'but', 'not',
+    'a',
+    'an',
+    'the',
+    'is',
+    'are',
+    'am',
+    'was',
+    'were',
+    'do',
+    'does',
+    'did',
+    'i',
+    'you',
+    'he',
+    'she',
+    'it',
+    'we',
+    'they',
+    'to',
+    'in',
+    'on',
+    'at',
+    'of',
+    'and',
+    'but',
+    'not',
   };
 
   /// Splits on spaces only -- English sentence punctuation never has a
@@ -75,10 +98,11 @@ class SentenceBuilderService {
     Random rng,
   ) {
     final correctLower = tokens.map(_stripPunctuation).toSet();
-    final decoyPool = otherEnglishTerms
-        .where((t) => !correctLower.contains(t.toLowerCase()))
-        .toList()
-      ..shuffle(rng);
+    final decoyPool =
+        otherEnglishTerms
+            .where((t) => !correctLower.contains(t.toLowerCase()))
+            .toList()
+          ..shuffle(rng);
     final decoys = decoyPool.take(_decoyCount).toList();
 
     final bank = <BankToken>[
@@ -122,14 +146,15 @@ class SentenceBuilderService {
     final blanks = <SentenceBlank>[];
     for (final index in chosenIndices) {
       final correctText = tokens[index];
-      final distractorPool = otherEnglishTerms
-          .where(
-            (t) =>
-                !usedTexts.contains(t) &&
-                t.toLowerCase() != _stripPunctuation(correctText),
-          )
-          .toList()
-        ..shuffle(rng);
+      final distractorPool =
+          otherEnglishTerms
+              .where(
+                (t) =>
+                    !usedTexts.contains(t) &&
+                    t.toLowerCase() != _stripPunctuation(correctText),
+              )
+              .toList()
+            ..shuffle(rng);
       final distractors = distractorPool.take(_blankOptionCount - 1).toList();
       final options = [correctText, ...distractors]..shuffle(rng);
       blanks.add(

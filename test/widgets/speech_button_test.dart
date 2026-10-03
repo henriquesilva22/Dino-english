@@ -44,7 +44,9 @@ void main() {
   Widget wrap(_FakeSpeechService fake, {String text = 'apple'}) {
     return ProviderScope(
       overrides: [speechServiceProvider.overrideWithValue(fake)],
-      child: MaterialApp(home: Scaffold(body: SpeechButton(text: text))),
+      child: MaterialApp(
+        home: Scaffold(body: SpeechButton(text: text)),
+      ),
     );
   }
 
@@ -87,33 +89,31 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(
-      find.textContaining('Instale uma voz em inglês'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Instale uma voz em inglês'), findsOneWidget);
   });
 
-  testWidgets('a successful speak leaves no error message and can be tapped again', (
-    tester,
-  ) async {
-    final fake = _FakeSpeechService();
-    await tester.pumpWidget(wrap(fake));
+  testWidgets(
+    'a successful speak leaves no error message and can be tapped again',
+    (tester) async {
+      final fake = _FakeSpeechService();
+      await tester.pumpWidget(wrap(fake));
 
-    await tester.tap(find.byType(SpeechButton));
-    await tester.pump();
-    fake.completeSpeak(SpeechResult.spoken);
-    await tester.pump();
-    await tester.pump();
+      await tester.tap(find.byType(SpeechButton));
+      await tester.pump();
+      fake.completeSpeak(SpeechResult.spoken);
+      await tester.pump();
+      await tester.pump();
 
-    expect(find.textContaining('Instale uma voz'), findsNothing);
-    expect(find.textContaining('Não foi possível'), findsNothing);
+      expect(find.textContaining('Instale uma voz'), findsNothing);
+      expect(find.textContaining('Não foi possível'), findsNothing);
 
-    await tester.tap(find.byType(SpeechButton));
-    await tester.pump();
-    fake.completeSpeak(SpeechResult.spoken);
-    await tester.pump();
-    await tester.pump();
+      await tester.tap(find.byType(SpeechButton));
+      await tester.pump();
+      fake.completeSpeak(SpeechResult.spoken);
+      await tester.pump();
+      await tester.pump();
 
-    expect(fake.spokenTexts, ['apple', 'apple']);
-  });
+      expect(fake.spokenTexts, ['apple', 'apple']);
+    },
+  );
 }

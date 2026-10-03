@@ -25,7 +25,10 @@ Future<AppDatabase> _seededDatabase() async {
   await database
       .into(database.userProfile)
       .insertOnConflictUpdate(
-        UserProfileCompanion.insert(id: const Value(1), createdAt: DateTime(2026)),
+        UserProfileCompanion.insert(
+          id: const Value(1),
+          createdAt: DateTime(2026),
+        ),
       );
   await database
       .into(database.dinoEvolutionState)
@@ -73,7 +76,9 @@ void main() {
   }
 
   test('a word with no word_progress row starts the Aprender step', () async {
-    await database.into(database.words).insert(_word('word.a', recommendedLevel: 1));
+    await database
+        .into(database.words)
+        .insert(_word('word.a', recommendedLevel: 1));
 
     final state = await awaitLoaded();
 
@@ -88,7 +93,9 @@ void main() {
   });
 
   test('a word already reviewed skips straight to Testar', () async {
-    await database.into(database.words).insert(_word('word.b', recommendedLevel: 1));
+    await database
+        .into(database.words)
+        .insert(_word('word.b', recommendedLevel: 1));
     await database
         .into(database.wordProgress)
         .insert(
@@ -105,71 +112,90 @@ void main() {
     expect(state.isLearningStep, isFalse);
   });
 
-  test('finishLearningStep only clears the flag -- no XP/index/attempt change', () async {
-    await database.into(database.words).insert(_word('word.c', recommendedLevel: 1));
-    await awaitLoaded();
-    final notifier = container.read(studySessionProvider.notifier);
+  test(
+    'finishLearningStep only clears the flag -- no XP/index/attempt change',
+    () async {
+      await database
+          .into(database.words)
+          .insert(_word('word.c', recommendedLevel: 1));
+      await awaitLoaded();
+      final notifier = container.read(studySessionProvider.notifier);
 
-    notifier.finishLearningStep();
-    final state = container.read(studySessionProvider);
+      notifier.finishLearningStep();
+      final state = container.read(studySessionProvider);
 
-    expect(state.isLearningStep, isFalse);
-    expect(state.currentIndex, 0);
-    expect(state.sessionXpEarned, 0);
-    final attempts = await database.select(database.exerciseAttempts).get();
-    expect(attempts, isEmpty);
-  });
+      expect(state.isLearningStep, isFalse);
+      expect(state.currentIndex, 0);
+      expect(state.sessionXpEarned, 0);
+      final attempts = await database.select(database.exerciseAttempts).get();
+      expect(attempts, isEmpty);
+    },
+  );
 
-  test('selectOption/submitAnswer are no-ops during the Aprender step', () async {
-    await database.into(database.words).insert(_word('word.d', recommendedLevel: 1));
-    await awaitLoaded();
-    final notifier = container.read(studySessionProvider.notifier);
+  test(
+    'selectOption/submitAnswer are no-ops during the Aprender step',
+    () async {
+      await database
+          .into(database.words)
+          .insert(_word('word.d', recommendedLevel: 1));
+      await awaitLoaded();
+      final notifier = container.read(studySessionProvider.notifier);
 
-    notifier.selectOption('word.d');
-    expect(container.read(studySessionProvider).selectedWordId, null);
+      notifier.selectOption('word.d');
+      expect(container.read(studySessionProvider).selectedWordId, null);
 
-    await notifier.submitAnswer();
-    expect(container.read(studySessionProvider).isAnswered, isFalse);
-    final attempts = await database.select(database.exerciseAttempts).get();
-    expect(attempts, isEmpty);
-  });
+      await notifier.submitAnswer();
+      expect(container.read(studySessionProvider).isAnswered, isFalse);
+      final attempts = await database.select(database.exerciseAttempts).get();
+      expect(attempts, isEmpty);
+    },
+  );
 
-  test('nextQuestion recalculates isLearningStep for the next question', () async {
-    await database.into(database.words).insert(_word('word.new', recommendedLevel: 1));
-    await database.into(database.words).insert(_word('word.reviewed', recommendedLevel: 1));
-    await database
-        .into(database.wordProgress)
-        .insert(
-          WordProgressCompanion.insert(
-            wordId: 'word.reviewed',
-            lastResultCorrect: const Value(false),
-          ),
-        );
+  test(
+    'nextQuestion recalculates isLearningStep for the next question',
+    () async {
+      await database
+          .into(database.words)
+          .insert(_word('word.new', recommendedLevel: 1));
+      await database
+          .into(database.words)
+          .insert(_word('word.reviewed', recommendedLevel: 1));
+      await database
+          .into(database.wordProgress)
+          .insert(
+            WordProgressCompanion.insert(
+              wordId: 'word.reviewed',
+              lastResultCorrect: const Value(false),
+            ),
+          );
 
-    final loaded = await awaitLoaded();
-    // The initial bucketed pass deterministically places the new word
-    // first and the reviewed word second, before any repeat filler pads
-    // the rest of the batch (see word_selection_service_test.dart).
-    expect(loaded.items.length, greaterThanOrEqualTo(2));
-    expect(loaded.items.first.isNewWord, isTrue);
-    expect(loaded.isLearningStep, isTrue);
+      final loaded = await awaitLoaded();
+      // The initial bucketed pass deterministically places the new word
+      // first and the reviewed word second, before any repeat filler pads
+      // the rest of the batch (see word_selection_service_test.dart).
+      expect(loaded.items.length, greaterThanOrEqualTo(2));
+      expect(loaded.items.first.isNewWord, isTrue);
+      expect(loaded.isLearningStep, isTrue);
 
-    final notifier = container.read(studySessionProvider.notifier);
-    notifier.finishLearningStep();
-    notifier.selectOption(loaded.items.first.word.id);
-    await notifier.submitAnswer();
-    notifier.nextQuestion();
+      final notifier = container.read(studySessionProvider.notifier);
+      notifier.finishLearningStep();
+      notifier.selectOption(loaded.items.first.word.id);
+      await notifier.submitAnswer();
+      notifier.nextQuestion();
 
-    final state = container.read(studySessionProvider);
-    expect(state.currentIndex, 1);
-    expect(state.items[1].isNewWord, isFalse);
-    expect(state.isLearningStep, isFalse);
-  });
+      final state = container.read(studySessionProvider);
+      expect(state.currentIndex, 1);
+      expect(state.items[1].isNewWord, isFalse);
+      expect(state.isLearningStep, isFalse);
+    },
+  );
 
   test(
     'Modo Imersão off (default) leaves an already-known word on Testar -- same as the existing tests above, restated explicitly as the regression baseline',
     () async {
-      await database.into(database.words).insert(_word('word.known', recommendedLevel: 1));
+      await database
+          .into(database.words)
+          .insert(_word('word.known', recommendedLevel: 1));
       await database
           .into(database.wordProgress)
           .insert(
@@ -192,7 +218,9 @@ void main() {
       // Must be set before awaitLoaded() establishes the listener that
       // triggers the first build()/_loadSession() read.
       container.read(immersionModeEnabledProvider.notifier).set(true);
-      await database.into(database.words).insert(_word('word.known', recommendedLevel: 1));
+      await database
+          .into(database.words)
+          .insert(_word('word.known', recommendedLevel: 1));
       await database
           .into(database.wordProgress)
           .insert(
@@ -216,7 +244,9 @@ void main() {
     'a brand-new word still shows its translation immediately under Modo Imersão -- unchanged from normal mode',
     () async {
       container.read(immersionModeEnabledProvider.notifier).set(true);
-      await database.into(database.words).insert(_word('word.new', recommendedLevel: 1));
+      await database
+          .into(database.words)
+          .insert(_word('word.new', recommendedLevel: 1));
 
       final state = await awaitLoaded();
 
@@ -230,7 +260,9 @@ void main() {
     'revealWordTranslation/revealSentenceTranslation only flip local flags -- no DB writes',
     () async {
       container.read(immersionModeEnabledProvider.notifier).set(true);
-      await database.into(database.words).insert(_word('word.known', recommendedLevel: 1));
+      await database
+          .into(database.words)
+          .insert(_word('word.known', recommendedLevel: 1));
       await database
           .into(database.wordProgress)
           .insert(
@@ -264,7 +296,9 @@ void main() {
     'submitting an answer under Modo Imersão records the same shape of attempt as the normal flow',
     () async {
       container.read(immersionModeEnabledProvider.notifier).set(true);
-      await database.into(database.words).insert(_word('word.known', recommendedLevel: 1));
+      await database
+          .into(database.words)
+          .insert(_word('word.known', recommendedLevel: 1));
       await database
           .into(database.wordProgress)
           .insert(
@@ -296,7 +330,9 @@ void main() {
     'Estudar must not dead-end into an infinite session',
     () async {
       for (final id in ['word.x', 'word.y', 'word.z']) {
-        await database.into(database.words).insert(_word(id, recommendedLevel: 1));
+        await database
+            .into(database.words)
+            .insert(_word(id, recommendedLevel: 1));
         await database
             .into(database.wordProgress)
             .insert(
@@ -327,7 +363,8 @@ void main() {
       expect(
         state.items.length,
         StudySessionController.kWordsPerBlock,
-        reason: 'the block never grows past its fixed size -- no 11th word is ever loaded',
+        reason:
+            'the block never grows past its fixed size -- no 11th word is ever loaded',
       );
       expect(state.isComplete, isTrue);
     },
@@ -337,10 +374,16 @@ void main() {
     'the completed block\'s results list every attempt with the word and whether it was correct, '
     'isolated to just this block',
     () async {
-      await database.into(database.words).insert(_word('word.right', recommendedLevel: 1));
-      await database.into(database.words).insert(_word('word.wrong', recommendedLevel: 1));
+      await database
+          .into(database.words)
+          .insert(_word('word.right', recommendedLevel: 1));
+      await database
+          .into(database.words)
+          .insert(_word('word.wrong', recommendedLevel: 1));
       for (var i = 0; i < 8; i++) {
-        await database.into(database.words).insert(_word('word.filler$i', recommendedLevel: 1));
+        await database
+            .into(database.words)
+            .insert(_word('word.filler$i', recommendedLevel: 1));
       }
 
       final loaded = await awaitLoaded();
@@ -355,7 +398,9 @@ void main() {
         // correctly otherwise -- so both an acerto and an erro land in
         // this block's results.
         final answerId = question.word.id == 'word.wrong'
-            ? question.options.firstWhere((o) => o.wordId != question.word.id).wordId
+            ? question.options
+                  .firstWhere((o) => o.wordId != question.word.id)
+                  .wordId
             : question.word.id;
         notifier.finishLearningStep();
         notifier.selectOption(answerId);
@@ -365,10 +410,17 @@ void main() {
 
       final state = container.read(studySessionProvider);
       expect(state.isComplete, isTrue);
-      expect(state.blockResults, hasLength(StudySessionController.kWordsPerBlock));
-      final right = state.blockResults.singleWhere((a) => a.word.id == 'word.right');
+      expect(
+        state.blockResults,
+        hasLength(StudySessionController.kWordsPerBlock),
+      );
+      final right = state.blockResults.singleWhere(
+        (a) => a.word.id == 'word.right',
+      );
       expect(right.wasCorrect, isTrue);
-      final wrong = state.blockResults.singleWhere((a) => a.word.id == 'word.wrong');
+      final wrong = state.blockResults.singleWhere(
+        (a) => a.word.id == 'word.wrong',
+      );
       expect(wrong.wasCorrect, isFalse);
       expect(wrong.word.portugueseTranslation, 'word.wrong (pt)');
     },
@@ -378,7 +430,9 @@ void main() {
     'a double-tap on Continuar right at the block boundary only fetches the block results once',
     () async {
       for (var i = 0; i < 5; i++) {
-        await database.into(database.words).insert(_word('word.dt$i', recommendedLevel: 1));
+        await database
+            .into(database.words)
+            .insert(_word('word.dt$i', recommendedLevel: 1));
       }
 
       final loaded = await awaitLoaded();
@@ -409,7 +463,10 @@ void main() {
       final state = container.read(studySessionProvider);
       expect(state.currentIndex, StudySessionController.kWordsPerBlock);
       expect(state.isComplete, isTrue);
-      expect(state.blockResults, hasLength(StudySessionController.kWordsPerBlock));
+      expect(
+        state.blockResults,
+        hasLength(StudySessionController.kWordsPerBlock),
+      );
     },
   );
 
@@ -418,7 +475,9 @@ void main() {
     'results with the previous block\'s',
     () async {
       for (var i = 0; i < 5; i++) {
-        await database.into(database.words).insert(_word('word.nb$i', recommendedLevel: 1));
+        await database
+            .into(database.words)
+            .insert(_word('word.nb$i', recommendedLevel: 1));
       }
 
       final loaded = await awaitLoaded();
@@ -432,9 +491,17 @@ void main() {
       }
       final firstBlockDone = container.read(studySessionProvider);
       expect(firstBlockDone.isComplete, isTrue);
-      expect(firstBlockDone.blockResults, hasLength(StudySessionController.kWordsPerBlock));
-      final firstBlockWordIds = firstBlockDone.blockResults.map((a) => a.word.id).toSet();
-      expect(loaded.items, isNotEmpty); // sanity: first block actually loaded something
+      expect(
+        firstBlockDone.blockResults,
+        hasLength(StudySessionController.kWordsPerBlock),
+      );
+      final firstBlockWordIds = firstBlockDone.blockResults
+          .map((a) => a.word.id)
+          .toSet();
+      expect(
+        loaded.items,
+        isNotEmpty,
+      ); // sanity: first block actually loaded something
 
       await notifier.startNewBlock();
 
@@ -445,7 +512,10 @@ void main() {
       expect(secondBlock.sessionXpEarned, 0);
       expect(secondBlock.isComplete, isFalse);
       expect(secondBlock.blockResults, isEmpty);
-      expect(secondBlock.items, hasLength(StudySessionController.kWordsPerBlock));
+      expect(
+        secondBlock.items,
+        hasLength(StudySessionController.kWordsPerBlock),
+      );
 
       // Answer the whole second block, then confirm its own results never
       // include any of the first block's attempts (different sessionId).
@@ -457,9 +527,14 @@ void main() {
         await notifier.nextQuestion();
       }
       final secondBlockDone = container.read(studySessionProvider);
-      expect(secondBlockDone.blockResults, hasLength(StudySessionController.kWordsPerBlock));
+      expect(
+        secondBlockDone.blockResults,
+        hasLength(StudySessionController.kWordsPerBlock),
+      );
 
-      final allAttempts = await database.select(database.exerciseAttempts).get();
+      final allAttempts = await database
+          .select(database.exerciseAttempts)
+          .get();
       expect(
         allAttempts.length,
         2 * StudySessionController.kWordsPerBlock,

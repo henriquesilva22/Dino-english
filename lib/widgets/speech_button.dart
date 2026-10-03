@@ -71,7 +71,9 @@ class _SpeechButtonState extends ConsumerState<SpeechButton> {
 
   @override
   Widget build(BuildContext context) {
-    final color = _lastResult == SpeechResult.noEnglishVoice || _lastResult == SpeechResult.failed
+    final color =
+        _lastResult == SpeechResult.noEnglishVoice ||
+            _lastResult == SpeechResult.failed
         ? NeonColors.red
         : NeonColors.cyan;
 

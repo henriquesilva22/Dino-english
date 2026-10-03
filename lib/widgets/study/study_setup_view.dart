@@ -73,8 +73,9 @@ class StudySetupView extends ConsumerWidget {
                 Switch(
                   value: immersionEnabled,
                   activeThumbColor: NeonColors.cyan,
-                  onChanged: (value) =>
-                      ref.read(immersionModeEnabledProvider.notifier).set(value),
+                  onChanged: (value) => ref
+                      .read(immersionModeEnabledProvider.notifier)
+                      .set(value),
                 ),
               ],
             ),
@@ -91,8 +92,7 @@ class StudySetupView extends ConsumerWidget {
           GlowButton(
             label: 'COMEÇAR',
             color: NeonColors.cyan,
-            onTap: () =>
-                ref.read(studySessionStartedProvider.notifier).start(),
+            onTap: () => ref.read(studySessionStartedProvider.notifier).start(),
           ),
         ],
       ),

@@ -55,7 +55,7 @@ enum _Bucket { newWord, overdue, weak, maintenance }
 /// Each candidate lands in exactly one bucket (see [_bucketFor]); the
 /// target mix is filled per bucket and then backfilled, in priority
 /// order overdue > weak > new > maintenance, if a bucket runs short --
-/// which matters a lot for the MVP's ~120-word bank.
+/// which matters a lot for the ~240-word bank.
 ///
 /// [count] is always honored as long as [pool] isn't empty: once every
 /// candidate that's actually due/new/weak has been used once, this does
@@ -112,7 +112,9 @@ class WordSelectionService {
       buckets[entry.key] = _prioritizeByCategory(entry.value, recentCategory);
     }
 
-    final mix = kind == SessionKind.study ? _BucketMix.study : _BucketMix.review;
+    final mix = kind == SessionKind.study
+        ? _BucketMix.study
+        : _BucketMix.review;
     final targetSlots = mix.slotsFor(count);
 
     final selected = <WordCandidate>[];
@@ -192,12 +194,12 @@ class WordSelectionService {
         .toList();
     final ranked = [...(eligiblePool.isNotEmpty ? eligiblePool : pool)]
       ..sort((a, b) {
-      final byMastery = a.masteryLevel.compareTo(b.masteryLevel);
-      if (byMastery != 0) return byMastery;
-      final aDue = a.nextReviewAt ?? DateTime(9999);
-      final bDue = b.nextReviewAt ?? DateTime(9999);
-      return aDue.compareTo(bDue);
-    });
+        final byMastery = a.masteryLevel.compareTo(b.masteryLevel);
+        if (byMastery != 0) return byMastery;
+        final aDue = a.nextReviewAt ?? DateTime(9999);
+        final bDue = b.nextReviewAt ?? DateTime(9999);
+        return aDue.compareTo(bDue);
+      });
 
     final windowSize = (ranked.length - 1).clamp(0, 5);
     final recentIds = [
@@ -242,8 +244,7 @@ class WordSelectionService {
       return _Bucket.weak;
     }
     final isDue =
-        candidate.nextReviewAt != null &&
-        !candidate.nextReviewAt!.isAfter(now);
+        candidate.nextReviewAt != null && !candidate.nextReviewAt!.isAfter(now);
     if (!isDue) return null;
     return candidate.masteryLevel >= 5 ? _Bucket.maintenance : _Bucket.overdue;
   }

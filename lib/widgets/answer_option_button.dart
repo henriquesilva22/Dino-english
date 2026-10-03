@@ -61,7 +61,11 @@ class AnswerOptionButton extends StatelessWidget {
     );
 
     if (state == AnswerOptionVisualState.selected) {
-      return AnimatedGlow(color: NeonColors.cyan, borderRadius: 16, child: button);
+      return AnimatedGlow(
+        color: NeonColors.cyan,
+        borderRadius: 16,
+        child: button,
+      );
     }
     return button;
   }

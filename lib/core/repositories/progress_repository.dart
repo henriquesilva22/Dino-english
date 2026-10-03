@@ -101,6 +101,7 @@ class ProgressRepository {
     required SessionKind sessionKind,
     required String sessionId,
     int? xpOverride,
+    bool countsAsExercise = true,
     String? userAnswer,
     int? responseTimeMs,
     DateTime? now,
@@ -149,7 +150,9 @@ class ProgressRepository {
       final profile = await (_database.select(
         _database.userProfile,
       )..where((t) => t.id.equals(1))).getSingle();
-      final xpToAward = wasCorrect ? (xpOverride ?? kDefaultCorrectAnswerXp) : 0;
+      final xpToAward = wasCorrect
+          ? (xpOverride ?? kDefaultCorrectAnswerXp)
+          : 0;
       final grant = _xp.grantXp(
         currentTotalXp: profile.totalXp,
         xpToAdd: xpToAward,
@@ -159,9 +162,14 @@ class ProgressRepository {
       final todayRow = await (_database.select(
         _database.dailyActivityLog,
       )..where((t) => t.studyDate.equals(todayKey))).getSingleOrNull();
-      final newExercisesCompleted = (todayRow?.exercisesCompleted ?? 0) + 1;
+      // Bonus XP (caring for the companion, a word met in conversation)
+      // is logged and counted as XP, but never as an exercise: it must
+      // not complete an active day for the streak/egg on its own.
+      final exerciseStep = countsAsExercise ? 1 : 0;
+      final newExercisesCompleted =
+          (todayRow?.exercisesCompleted ?? 0) + exerciseStep;
       final newCorrectCount =
-          (todayRow?.correctCount ?? 0) + (wasCorrect ? 1 : 0);
+          (todayRow?.correctCount ?? 0) + (wasCorrect ? exerciseStep : 0);
       final newXpEarned = (todayRow?.xpEarned ?? 0) + xpToAward;
       final countsAsActiveDay = _streak.countsAsActiveDay(
         newExercisesCompleted,
@@ -273,20 +281,17 @@ class ProgressRepository {
     return activeDates.where((d) => !d.isBefore(startDay)).length;
   }
 
-  Stream<UserProfileRow> watchUserProfile() =>
-      (_database.select(
-        _database.userProfile,
-      )..where((t) => t.id.equals(1))).watchSingle();
+  Stream<UserProfileRow> watchUserProfile() => (_database.select(
+    _database.userProfile,
+  )..where((t) => t.id.equals(1))).watchSingle();
 
-  Stream<DinoEvolutionStateRow> watchDinoEvolutionState() =>
-      (_database.select(
-        _database.dinoEvolutionState,
-      )..where((t) => t.id.equals(1))).watchSingle();
+  Stream<DinoEvolutionStateRow> watchDinoEvolutionState() => (_database.select(
+    _database.dinoEvolutionState,
+  )..where((t) => t.id.equals(1))).watchSingle();
 
-  Future<UserProfileRow> fetchUserProfile() =>
-      (_database.select(
-        _database.userProfile,
-      )..where((t) => t.id.equals(1))).getSingle();
+  Future<UserProfileRow> fetchUserProfile() => (_database.select(
+    _database.userProfile,
+  )..where((t) => t.id.equals(1))).getSingle();
 
   /// All attempts recorded under [sessionId], oldest first, joined back to
   /// their word. One Estudar block = one `sessionId` (see
@@ -295,14 +300,15 @@ class ProgressRepository {
   Future<List<StudyBlockAttempt>> fetchAttemptsForSession(
     String sessionId,
   ) async {
-    final query = _database.select(_database.exerciseAttempts).join([
-      innerJoin(
-        _database.words,
-        _database.words.id.equalsExp(_database.exerciseAttempts.wordId),
-      ),
-    ])
-      ..where(_database.exerciseAttempts.sessionId.equals(sessionId))
-      ..orderBy([OrderingTerm.asc(_database.exerciseAttempts.attemptedAt)]);
+    final query =
+        _database.select(_database.exerciseAttempts).join([
+            innerJoin(
+              _database.words,
+              _database.words.id.equalsExp(_database.exerciseAttempts.wordId),
+            ),
+          ])
+          ..where(_database.exerciseAttempts.sessionId.equals(sessionId))
+          ..orderBy([OrderingTerm.asc(_database.exerciseAttempts.attemptedAt)]);
     final rows = await query.get();
     return rows
         .map(
@@ -361,11 +367,8 @@ class ProgressRepository {
 
     int? daysRemaining;
     if (dinoState.hatchedAt == null && dinoState.hatchingStartedAt != null) {
-      daysRemaining =
-          (_hatching.requiredActiveDays - activeDaysSinceHatching).clamp(
-            0,
-            _hatching.requiredActiveDays,
-          );
+      daysRemaining = (_hatching.requiredActiveDays - activeDaysSinceHatching)
+          .clamp(0, _hatching.requiredActiveDays);
     }
 
     return EggProgressInfo(

@@ -31,9 +31,15 @@ class PlatformComponent extends PositionComponent
   static const double kPlatformHeight = 28;
   static const double _tileSize = 64;
 
-  late final Sprite _leftCap = Sprite(Flame.images.fromCache(kPlatformLeftCapAsset));
-  late final Sprite _middle = Sprite(Flame.images.fromCache(kPlatformMiddleAsset));
-  late final Sprite _rightCap = Sprite(Flame.images.fromCache(kPlatformRightCapAsset));
+  late final Sprite _leftCap = Sprite(
+    Flame.images.fromCache(kPlatformLeftCapAsset),
+  );
+  late final Sprite _middle = Sprite(
+    Flame.images.fromCache(kPlatformMiddleAsset),
+  );
+  late final Sprite _rightCap = Sprite(
+    Flame.images.fromCache(kPlatformRightCapAsset),
+  );
 
   @override
   void onGameResize(Vector2 size) {
@@ -47,7 +53,9 @@ class PlatformComponent extends PositionComponent
     // physics (which reads game.levelLayout live every frame) kept
     // working -- collision fine, visuals broken. Same pattern already
     // used by GroundComponent/PetComponent/BossComponent.
-    final current = game.levelLayout.platforms.firstWhere((p) => p.id == spec.id);
+    final current = game.levelLayout.platforms.firstWhere(
+      (p) => p.id == spec.id,
+    );
     position = Vector2(current.left, current.top);
     this.size = Vector2(current.right - current.left, kPlatformHeight);
   }

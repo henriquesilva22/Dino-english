@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Offline voice model (~104 MB): fetched by tool/download_voice_model.sh
+/assets/models/voice/*
+!/assets/models/voice/.gitkeep

@@ -66,7 +66,9 @@ class SrsService {
         newStreak >= promotionThreshold &&
         currentMasteryLevel < maxMasteryLevel;
 
-    final resultingLevel = promotes ? currentMasteryLevel + 1 : currentMasteryLevel;
+    final resultingLevel = promotes
+        ? currentMasteryLevel + 1
+        : currentMasteryLevel;
     return SrsAnswerResult(
       newMasteryLevel: resultingLevel,
       newStreak: promotes ? 0 : newStreak,
