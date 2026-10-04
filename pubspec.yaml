@@ -78,6 +78,8 @@ flutter:
 
   assets:
     - assets/seed/words_seed.json
+    # The Dino's Portuguese-with-English sentences and word lessons.
+    - assets/learning/
     - assets/models/egg/Egg_Asset_v04.glb
     # The companion: built from assets/glbs/ by tool/build_companion_model.js.
     - assets/models/dino/dino_companion.glb

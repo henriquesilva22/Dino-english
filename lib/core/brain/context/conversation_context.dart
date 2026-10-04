@@ -45,13 +45,21 @@ class QuizQuestion extends PendingQuestion {
 /// "Can you say WATER?" -- the child should repeat [word] in English
 /// (the companion's way of teaching a word met in conversation).
 class RepeatWordQuestion extends PendingQuestion {
-  const RepeatWordQuestion({required this.word, this.attempts = 0});
+  const RepeatWordQuestion({
+    required this.word,
+    this.attempts = 0,
+    this.lesson = false,
+  });
 
   final VocabularyEntry word;
   final int attempts;
 
+  /// "Agora fala comigo: WALK." -- asked by the companion's word lesson
+  /// (which grades it, in Portuguese), not by the brain.
+  final bool lesson;
+
   RepeatWordQuestion nextAttempt() =>
-      RepeatWordQuestion(word: word, attempts: attempts + 1);
+      RepeatWordQuestion(word: word, attempts: attempts + 1, lesson: lesson);
 }
 
 /// "Did you mean water?" / "Did you mean bed or bad?"
@@ -153,6 +161,34 @@ class ConversationContext {
 
   bool greeted = false;
   int consecutiveMisunderstandings = 0;
+
+  /// The English word of the Dino's last Portuguese-with-English sentence
+  /// ("Eu vou WALK amanhã" -> `walk`): what "o que é isso?" / "essa
+  /// palavra?" refer to.
+  String? lastTargetWord;
+
+  /// Whether the Dino's *previous* reply had [lastTargetWord] in it ("não
+  /// entendi" then means that word, not the whole reply).
+  bool lastTargetFresh = false;
+
+  /// What the Dino said last (English text of the reply).
+  String? lastDinoSentence;
+
+  /// Topic of the last exchange (`food`, `play`, `sleep`...), if known.
+  String? lastTopic;
+
+  /// How the child's last sentence was understood (intent name).
+  String? lastIntent;
+
+  /// `portuguese`, `english` or `mixed`: how the child is talking.
+  String? conversationLanguage;
+
+  /// The Dino asked the child to say [lastTargetWord] ("Agora fala
+  /// comigo: WALK.") and listens for it.
+  bool get awaitingRepetition {
+    final question = pending;
+    return question is RepeatWordQuestion && question.lesson;
+  }
 
   List<ConversationTurn> get turns => List.unmodifiable(_turns);
 

@@ -261,6 +261,24 @@ function inPlace(clip) {
   return Math.hypot(dx, dz) / clip.duration;
 }
 
+/** Turns the whole clip about the vertical so that, on average, the body
+ *  faces +z (some sources come turned, e.g. the punch at ~45 deg) -- the
+ *  app turns the Dino itself. Returns the correction in degrees. */
+function faceForward(clip) {
+  const tr = clip.tracks[HIPS];
+  let sx = 0, sz = 0;
+  for (const q of tr.r) {
+    const f = qrot(q, Z);
+    sx += f[0];
+    sz += f[2];
+  }
+  const yaw = Math.atan2(sx, sz);
+  const fix = qaxis(Y, (-yaw * 180) / Math.PI);
+  tr.r = tr.r.map((q) => qnorm(qmul(fix, q)));
+  tr.t = tr.t.map((t) => qrot(fix, t));
+  return (-yaw * 180) / Math.PI;
+}
+
 /** Measures the real soles: the mesh's lowest vertices (bind pose), skinned
  *  like the renderer does. [groundClip] moves the hips so the lowest sole
  *  of the whole clip touches y = 0 -- never buried, never floating. */
@@ -469,6 +487,8 @@ if (require.main === module) {
   const happy = extractClip('dino dance.glb');
   const jump = extractClip('dino pulo serve para o jogo.glb');
   inPlace(jump);
+  const turned = Object.fromEntries(Object.entries({ walk, run, attack, eating, happy, jump })
+    .map(([n, c]) => [n, +faceForward(c).toFixed(1)]));
   const walkSpeed = inPlace(walk);
   const runSpeed = inPlace(run);
   inPlace(happy);
@@ -513,6 +533,7 @@ if (require.main === module) {
     boundsMin: [0, 1, 2].map((i) => +ext(i, Math.min).toFixed(3)),
     boundsMax: [0, 1, 2].map((i) => +ext(i, Math.max).toFixed(3)),
     soleLift: lift,
+    turnedDegrees: turned,
     clips: Object.fromEntries(Object.entries(clips).map(([n, c]) => [n, +c.duration.toFixed(4)])),
     walkSpeed: +walkSpeed.toFixed(4),
     runSpeed: +runSpeed.toFixed(4),

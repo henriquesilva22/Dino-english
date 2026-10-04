@@ -20,6 +20,10 @@ import 'engine/response_selector.dart';
 import 'engine/text_normalizer.dart';
 import 'engine/vocabulary_detector.dart';
 import 'food/food_item.dart';
+import 'learning/learning_word.dart';
+import 'learning/learning_word_bank.dart';
+import 'learning/word_lesson_controller.dart';
+import 'learning/word_mastery.dart';
 import 'voice/speech_recognition_service.dart';
 
 /// Persistence port for [CompanionState]. The app uses the Drift-backed
@@ -83,6 +87,7 @@ class CompanionEngine {
     this._totalXp = 0,
     this._level = 1,
     this._needs = const CompanionNeedsService(),
+    LearningWordBank? learningWords,
     Random? random,
     DateTime Function()? clock,
   }) : _random = random ?? Random(),
@@ -96,6 +101,15 @@ class CompanionEngine {
     _say = ResponseGenerator(random: _random);
     _words = VocabularyDetector(_vocabulary);
     _selector = ResponseSelector(random: _random);
+    if (learningWords != null && !learningWords.isEmpty) {
+      _lessons = WordLessonController(
+        bank: learningWords,
+        mastery: WordMasteryTracker(_memory, clock: _clock),
+        vocabulary: _vocabulary,
+        random: _random,
+        clock: _clock,
+      );
+    }
   }
 
   final OfficialVocabulary _vocabulary;
@@ -114,6 +128,10 @@ class CompanionEngine {
   final CompanionIntentDetector _intents = CompanionIntentDetector();
   static const _resolver = ContextResolver();
   late final ResponseSelector _selector;
+
+  /// Teaching by context ("Eu vou WALK amanhã."); null without a
+  /// learning bank (then the Dino talks as before).
+  WordLessonController? _lessons;
 
   CompanionState? _state;
   int _totalXp;
@@ -171,6 +189,23 @@ class CompanionEngine {
     await _ensureLoaded();
     _refresh();
     final text = _normalizer.normalize(input);
+    if (_lessons case final lessons?) {
+      final reply = await lessons.handle(
+        text,
+        _brain.context,
+        level: _lessonLevel,
+      );
+      if (reply != null) {
+        await _memory.rememberFact(
+          MemoryKeys.lastInteraction,
+          _clock().toIso8601String(),
+        );
+        final response = await _fromLesson(reply);
+        _recordTurns(input, response);
+        noteSaid(response);
+        return response;
+      }
+    }
     final vocabulary = _words.detect(text);
     _languageContext = _languages.resolve(
       text.folded,
@@ -222,7 +257,12 @@ class CompanionEngine {
         intent = CompanionIntent.unknown;
       }
     }
-    return response.copyWith(
+    final topic = _topicOf(intent, context.entity);
+    _brain.context
+      ..lastIntent = intent.name
+      ..lastTopic = topic ?? _brain.context.lastTopic
+      ..conversationLanguage = _languageContext.conversationLanguage.name;
+    final reply = response.copyWith(
       intent: intent,
       // "I don't know that yet": pensive, never scared.
       animation: intent == CompanionIntent.unknown
@@ -234,6 +274,171 @@ class CompanionEngine {
       shouldListenAgain:
           intent != CompanionIntent.goodbye && response.activity == null,
     );
+    final withWord = _hybridAllowedAfter(intent)
+        ? await _withHybrid(reply, context: topic)
+        : reply;
+    noteSaid(withWord);
+    return withWord;
+  }
+
+  // ---- teaching by context ("Eu vou WALK amanhã.") -----------------------------
+
+  /// Replies since the Dino last slipped an English word into a
+  /// Portuguese sentence.
+  int _repliesSinceHybrid = 0;
+
+  /// Template level for the child's English: 1 (A1) .. 3 (B1).
+  int get _lessonLevel => EnglishTier.forLevel(_level).index + 1;
+
+  /// The word lessons (word being taught, mastery...), for tests and
+  /// debugging.
+  WordLessonController? get lessons => _lessons;
+
+  bool _hybridAllowedAfter(CompanionIntent intent) => switch (intent) {
+    CompanionIntent.goodbye ||
+    CompanionIntent.unknown ||
+    CompanionIntent.requestPortuguese ||
+    CompanionIntent.requestTranslation ||
+    CompanionIntent.learnWord ||
+    CompanionIntent.translateWord ||
+    CompanionIntent.repeatWord => false,
+    _ => true,
+  };
+
+  /// Now and then (never twice in a row, surely after a few replies) the
+  /// Dino adds a Portuguese sentence with one English word on the topic:
+  /// "Eu quero EAT uma maçã." -- the child may ask what it means. Never
+  /// while it waits for an answer, opens a game or sleeps.
+  Future<CompanionResponse> _withHybrid(
+    CompanionResponse response, {
+    String? context,
+    bool always = false,
+  }) async {
+    final lessons = _lessons;
+    if (lessons == null) return response;
+    if (response.lines.isEmpty ||
+        response.isWaitingForAnswer ||
+        response.activity != null ||
+        state.isSleeping ||
+        _brain.context.pending != null) {
+      _repliesSinceHybrid++;
+      return response;
+    }
+    final due =
+        always ||
+        _repliesSinceHybrid >= 3 ||
+        (_repliesSinceHybrid >= 1 && _random.nextDouble() < 0.4);
+    if (!due) {
+      _repliesSinceHybrid++;
+      return response;
+    }
+    final sentence = await lessons.sentence(
+      level: _lessonLevel,
+      context: context,
+      conversation: _brain.context,
+    );
+    if (sentence == null) return response;
+    _repliesSinceHybrid = 0;
+    return response.copyWith(lines: [...response.lines, sentence.toLine()]);
+  }
+
+  /// The topic of an exchange, to keep the English word on it.
+  static String? _topicOf(CompanionIntent intent, CompanionEntity? entity) {
+    switch (intent) {
+      case CompanionIntent.askHungry ||
+          CompanionIntent.food ||
+          CompanionIntent.commandEat:
+        return 'food';
+      case CompanionIntent.askThirsty ||
+          CompanionIntent.water ||
+          CompanionIntent.commandDrink:
+        return 'drink';
+      case CompanionIntent.askPlay ||
+          CompanionIntent.play ||
+          CompanionIntent.commandPlay:
+        return 'play';
+      case CompanionIntent.askSleepy ||
+          CompanionIntent.sleep ||
+          CompanionIntent.commandSleep:
+        return 'sleep';
+      default:
+        break;
+    }
+    return switch (entity?.category) {
+      EntityCategory.food => 'food',
+      EntityCategory.drink => 'drink',
+      EntityCategory.animal => 'animal',
+      EntityCategory.toy || EntityCategory.game => 'play',
+      EntityCategory.place => 'place',
+      EntityCategory.nature => 'nature',
+      _ => null,
+    };
+  }
+
+  /// A lesson step as a reply (XP through the usual rewards).
+  Future<CompanionResponse> _fromLesson(LessonReply reply) async {
+    final word = reply.word;
+    final xp = await _grant(
+      reply.xp,
+      wordId: word == null ? null : _vocabulary.byEnglish(word.english)?.id,
+      reason: 'companion_word_lesson',
+      countsAsExercise: false,
+    );
+    if (reply.success && word != null) {
+      await _memory.rememberFact(MemoryKeys.lastWordLearned, word.english);
+      _state = state.adjust(DinoNeed.happiness, 3);
+      await _save();
+    }
+    return CompanionResponse(
+      lines: reply.lines,
+      emotion: _emotion(xp),
+      animation: reply.success
+          ? CompanionAnimation.celebrating
+          : CompanionAnimation.talking,
+      state: state,
+      intent: reply.success || reply.awaitingRepetition
+          ? CompanionIntent.repeatWord
+          : CompanionIntent.learnWord,
+      xpReward: xp,
+      vocabulary: [?word?.english],
+      suggestions: reply.awaitingRepetition && word != null
+          ? [word.english]
+          : const [],
+      isWaitingForAnswer: reply.awaitingRepetition,
+      // Mixed lines carry their own languages.
+      voice: VoiceMode.english,
+    );
+  }
+
+  /// The meaning of an English word shown in a sentence (the child
+  /// tapped it), or null if the Dino doesn't know it.
+  LearningWord? wordInfo(String english) => _lessons?.wordFor(english);
+
+  /// The child tapped a word and asked what it is: the explanation, then
+  /// "Agora fala comigo". Null if unknown.
+  Future<CompanionResponse?> explainWord(String english) async {
+    await _ensureLoaded();
+    _refresh();
+    final lessons = _lessons;
+    final word = lessons?.wordFor(english);
+    if (lessons == null || word == null) return null;
+    final response = await _fromLesson(
+      await lessons.explain(word, _brain.context, level: _lessonLevel),
+    );
+    noteSaid(response);
+    return response;
+  }
+
+  /// "⭐ Praticar": straight to "Fala comigo: WALK.".
+  Future<CompanionResponse?> practiceWord(String english) async {
+    await _ensureLoaded();
+    _refresh();
+    final lessons = _lessons;
+    final word = lessons?.wordFor(english);
+    if (lessons == null || word == null) return null;
+    final response = await _fromLesson(lessons.practice(word, _brain.context));
+    noteSaid(response);
+    return response;
   }
 
   // ---- language ---------------------------------------------------------------
@@ -270,6 +475,7 @@ class CompanionEngine {
   /// Every reply shown to the child goes through here (the controller
   /// calls it), so language requests know what was said last.
   void noteSaid(CompanionResponse response) {
+    _lessons?.noteSaid(response, _brain.context);
     if (response.intent == CompanionIntent.requestPortuguese ||
         response.intent == CompanionIntent.requestTranslation) {
       return;
@@ -631,8 +837,11 @@ class CompanionEngine {
   }
 
   /// The "Brincar" button: the ball is waiting to be kicked.
-  Future<CompanionResponse> playInvite() =>
-      _quick('play.invite', CompanionAnimation.happy);
+  Future<CompanionResponse> playInvite() async => _withHybrid(
+    await _quick('play.invite', CompanionAnimation.happy),
+    context: 'play',
+    always: true,
+  );
 
   /// The ball was tapped or picked up: the Dino watches it.
   Future<CompanionResponse> ballNoticed({required bool dragging}) =>
@@ -683,7 +892,16 @@ class CompanionEngine {
     if (need == null || need == DinoNeed.hygiene || state.isSleeping) {
       return null;
     }
-    return _quick('nudge.${need.name}', idleAnimationFor(state));
+    return _withHybrid(
+      await _quick('nudge.${need.name}', idleAnimationFor(state)),
+      context: switch (need) {
+        DinoNeed.hunger => 'food',
+        DinoNeed.thirst => 'drink',
+        DinoNeed.energy => 'sleep',
+        _ => 'play',
+      },
+      always: true,
+    );
   }
 
   Future<CompanionResponse> _quick(

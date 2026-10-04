@@ -121,9 +121,11 @@ class PetComponent extends PositionComponent
           );
       }
     }
-    // A new layout (screen size): back on the ground, on the path.
-    lanes.reset();
-    position = Vector2(game.levelLayout.petX, game.levelLayout.ground.top);
+    // Called on every layout pass of the screen (a shot repaints it), not
+    // only when the size changes: keep the lane the pet is on, just place
+    // it on the (maybe moved) surfaces.
+    final layout = game.levelLayout;
+    position = Vector2(layout.petX, lanes.footY(layout.laneTops));
     _publish();
   }
 

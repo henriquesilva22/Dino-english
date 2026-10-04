@@ -1,6 +1,7 @@
 import 'dart:async' show StreamSubscription, Timer, unawaited;
 
 import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -12,6 +13,8 @@ import '../core/companion/companion_engine.dart';
 import '../core/companion/companion_response.dart';
 import '../core/companion/companion_state.dart';
 import '../core/companion/food/food_item.dart';
+import '../core/companion/learning/learning_word.dart';
+import '../core/companion/learning/learning_word_bank.dart';
 import '../core/companion/voice/speech_recognition_service.dart';
 import '../core/economy/coin_repository.dart';
 import '../core/models/session_kind.dart';
@@ -30,6 +33,7 @@ class DinoChatMessage {
     required this.text,
     this.translation,
     this.viaVoice = false,
+    this.english = const [],
   });
 
   final Speaker speaker;
@@ -37,6 +41,9 @@ class DinoChatMessage {
 
   /// Portuguese subtitle for Dino lines.
   final String? translation;
+
+  /// English words inside a Portuguese line ("Eu vou WALK amanhã.").
+  final List<String> english;
 
   /// The child said it out loud (shows what the Dino heard).
   final bool viaVoice;
@@ -327,6 +334,14 @@ class DinoChatController extends Notifier<DinoChatState> {
     await memory.load();
     if (!ref.mounted) return;
 
+    LearningWordBank? learning;
+    try {
+      learning = await LearningWordBank.load(rootBundle);
+    } catch (_) {
+      // Without the bank the Dino still talks, just without word lessons.
+    }
+    if (!ref.mounted) return;
+
     final engine = CompanionEngine(
       vocabulary: OfficialVocabulary.fromWords(words),
       memory: memory,
@@ -334,6 +349,7 @@ class DinoChatController extends Notifier<DinoChatState> {
       rewards: _ProgressCompanionRewards(ref, _sessionId),
       totalXp: profile.totalXp,
       level: profile.currentLevel,
+      learningWords: learning,
     );
     await engine.load();
     if (!ref.mounted) return;
@@ -575,6 +591,55 @@ class DinoChatController extends Notifier<DinoChatState> {
     _childSaid = (trimmed, viaVoice);
     final response = await engine.process(trimmed);
     if (!ref.mounted) return;
+    await _apply(response);
+  }
+
+  // ---- English words in the Dino's sentences ---------------------------------
+
+  /// What a word the child tapped means (null if the Dino doesn't know).
+  LearningWord? wordInfo(String english) => _engine?.wordInfo(english);
+
+  /// 🔊 on a tapped word: just the word, in the English voice.
+  Future<void> hearWord(String english) async {
+    final engine = _engine;
+    if (engine == null) return;
+    final display = english.toUpperCase();
+    await ref
+        .read(companionVoiceServiceProvider)
+        .say(
+          CompanionResponse(
+            lines: [
+              CompanionLine.mixed(display, english: [display]),
+            ],
+            emotion: CompanionEmotion.happy,
+            animation: CompanionAnimation.talking,
+            state: engine.state,
+          ),
+        );
+  }
+
+  /// "O que é WALK?" by tapping the word.
+  Future<void> explainWord(String english) =>
+      _lesson((engine) => engine.explainWord(english));
+
+  /// ⭐ Praticar: "Fala comigo: WALK."
+  Future<void> practiceWord(String english) =>
+      _lesson((engine) => engine.practiceWord(english));
+
+  Future<void> _lesson(
+    Future<CompanionResponse?> Function(CompanionEngine engine) step,
+  ) async {
+    final engine = _engine;
+    if (engine == null || state.isThinking) return;
+    state = state.copyWith(isThinking: true);
+    _updateHalfDuplex();
+    final response = await step(engine);
+    if (!ref.mounted) return;
+    if (response == null) {
+      state = state.copyWith(isThinking: false);
+      _updateHalfDuplex();
+      return;
+    }
     await _apply(response);
   }
 
@@ -921,6 +986,7 @@ class DinoChatController extends Notifier<DinoChatState> {
             speaker: Speaker.dino,
             text: line.text,
             translation: line.translation,
+            english: line.english ?? const [],
           ),
       ],
       suggestions: response.suggestions,

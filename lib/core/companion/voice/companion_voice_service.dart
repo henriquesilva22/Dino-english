@@ -90,7 +90,15 @@ class TtsCompanionVoiceService implements CompanionVoiceService {
     final mode = response.voice;
     final queue = [
       for (final line in response.lines) ...[
-        if (mode == VoiceMode.portuguese)
+        // "Eu vou WALK amanhã.": Portuguese with the English word in the
+        // English voice, whatever the mode.
+        if (line.isMixed)
+          for (final segment in line.segments)
+            SpokenLine(
+              speakable(segment.text),
+              segment.isEnglish ? kEnglishLocale : kPortugueseLocale,
+            )
+        else if (mode == VoiceMode.portuguese)
           SpokenLine(
             speakable(line.translation ?? line.text),
             kPortugueseLocale,

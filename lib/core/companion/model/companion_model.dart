@@ -157,8 +157,8 @@ class CompanionModel {
     },
     walkSpeed: 0.7856,
     runSpeed: 1.254,
-    attackHitSeconds: 0.5833,
-    attackReach: 0.298,
+    attackHitSeconds: 0.6667,
+    attackReach: 0.301,
     mouth: CompanionMouthTarget(ModelPoint(0, 0.66, 0.25)),
   );
 

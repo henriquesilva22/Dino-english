@@ -176,4 +176,51 @@ void main() {
     await Future.wait([first, second]);
     expect(speech.said.map((u) => u.text), ['First', 'Second', 'Segundo']);
   });
+
+  group('Portuguese with an English word', () {
+    List<String> spoken() => [
+      for (final u in speech.said) '${u.locale} ${u.text}',
+    ];
+
+    test('"Eu vou WALK amanhã.": Portuguese voice, WALK in English', () async {
+      await voice.say(
+        _reply(const [
+          CompanionLine.mixed('Eu vou WALK amanhã.', english: ['WALK']),
+        ], voice: VoiceMode.english),
+      );
+      expect(spoken(), ['pt-BR Eu vou', 'en-US WALK', 'pt-BR amanhã.']);
+    });
+
+    test('a plain Portuguese line, and *marked* English', () async {
+      await voice.say(
+        _reply([
+          const CompanionLine.mixed('Não tem problema!'),
+          CompanionLine.marked('*Great job!* Você falou *WALK* hoje'),
+        ]),
+      );
+      expect(spoken(), [
+        'pt-BR Não tem problema!',
+        'en-US Great job!',
+        'pt-BR Você falou',
+        'en-US WALK',
+        'pt-BR hoje',
+      ]);
+    });
+
+    test('segments rebuild the text for drawing', () {
+      const line = CompanionLine.mixed(
+        'Vamos WALK até a casa.',
+        english: ['WALK'],
+      );
+      expect(line.displaySegments.map((s) => s.text).join(), line.text);
+      expect(line.segments, const [
+        LineSegment('Vamos', isEnglish: false),
+        LineSegment('WALK', isEnglish: true),
+        LineSegment('até a casa.', isEnglish: false),
+      ]);
+      // Never inside another word.
+      const other = CompanionLine.mixed('Eu RUNNING RUN', english: ['RUN']);
+      expect(other.segments.where((s) => s.isEnglish), hasLength(1));
+    });
+  });
 }

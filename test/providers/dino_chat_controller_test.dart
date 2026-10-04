@@ -313,7 +313,8 @@ void main() {
         await notifier.send('Eu gosto de azul');
         await notifier.send('Qual é minha cor favorita?');
         final r = container.read(dinoChatProvider).lastResponse!;
-        expect(r.englishText, 'Your favorite color is blue!');
+        // (A Portuguese sentence with an English word may follow.)
+        expect(r.lines.first.text, 'Your favorite color is blue!');
         expect(r.portugueseText, 'Sua cor favorita é azul!');
       },
     );

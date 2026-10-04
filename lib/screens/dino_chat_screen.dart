@@ -32,6 +32,7 @@ import '../widgets/companion/dino_animated_model.dart';
 import '../widgets/companion/food_drag.dart';
 import '../widgets/companion/food_panel.dart';
 import '../widgets/companion/hearts_burst.dart';
+import '../widgets/companion/mixed_line_text.dart';
 import 'exam_screen.dart';
 import 'sentence_builder_screen.dart';
 import 'word_slash_game_screen.dart';
@@ -167,8 +168,10 @@ class _DinoChatScreenState extends ConsumerState<DinoChatScreen>
           reverse: true,
           padding: const EdgeInsets.all(16),
           itemCount: messages.length,
-          itemBuilder: (context, i) =>
-              _Bubble(message: messages[messages.length - 1 - i]),
+          itemBuilder: (context, i) => _Bubble(
+            message: messages[messages.length - 1 - i],
+            onWord: (word) => showWordCard(this.context, ref, word),
+          ),
         ),
       ),
     );
@@ -838,17 +841,28 @@ class _PetStageState extends ConsumerState<_PetStage> {
             ],
           ),
         ),
-        _SpeechBubble(response: widget.response, status: widget.status),
+        _SpeechBubble(
+          response: widget.response,
+          status: widget.status,
+          onWord: (word) => showWordCard(context, ref, word),
+        ),
       ],
     );
   }
 }
 
 class _SpeechBubble extends StatelessWidget {
-  const _SpeechBubble({required this.response, required this.status});
+  const _SpeechBubble({
+    required this.response,
+    required this.status,
+    required this.onWord,
+  });
 
   final CompanionResponse? response;
   final String? status;
+
+  /// The child tapped an English word in a Portuguese line.
+  final ValueChanged<String> onWord;
 
   @override
   Widget build(BuildContext context) {
@@ -895,8 +909,10 @@ class _SpeechBubble extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (final line in lines) ...[
-                    Text(
-                      line.text,
+                    MixedLineText(
+                      text: line.text,
+                      english: line.english ?? const [],
+                      onWord: onWord,
                       style: const TextStyle(
                         color: NeonColors.textPrimary,
                         fontSize: 17,
@@ -1045,9 +1061,10 @@ class _CareButton extends StatelessWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.message});
+  const _Bubble({required this.message, this.onWord});
 
   final DinoChatMessage message;
+  final ValueChanged<String>? onWord;
 
   @override
   Widget build(BuildContext context) {
@@ -1075,12 +1092,14 @@ class _Bubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              isDino
+            MixedLineText(
+              text: isDino
                   ? '🦖 ${message.text}'
                   : message.viaVoice
                   ? '🎤 ${message.text}'
                   : message.text,
+              english: message.english,
+              onWord: onWord,
               style: const TextStyle(
                 color: NeonColors.textPrimary,
                 fontSize: 15,
@@ -1448,4 +1467,90 @@ class _XpBurstState extends State<_XpBurst>
       ),
     );
   }
+}
+
+/// An English word the child tapped in the Dino's sentence:
+/// WALK · caminhar · 🔊 Ouvir · ⭐ Praticar.
+void showWordCard(BuildContext context, WidgetRef ref, String english) {
+  final notifier = ref.read(dinoChatProvider.notifier);
+  final word = notifier.wordInfo(english);
+  if (word == null) return;
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: NeonColors.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (sheet) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              word.display,
+              key: const ValueKey('word-card-english'),
+              style: const TextStyle(
+                color: MixedLineText.wordColor,
+                fontSize: 34,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            if (word.pronunciation case final say?)
+              Text(
+                '"$say"',
+                style: const TextStyle(
+                  color: NeonColors.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            const SizedBox(height: 6),
+            Text(
+              word.portuguese,
+              style: const TextStyle(
+                color: NeonColors.textPrimary,
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('word-card-listen'),
+                    onPressed: () => unawaited(notifier.hearWord(english)),
+                    icon: const Text('🔊', style: TextStyle(fontSize: 20)),
+                    label: const Text('Ouvir'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: NeonColors.cyan,
+                      side: const BorderSide(color: NeonColors.cyan),
+                      minimumSize: const Size.fromHeight(52),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    key: const ValueKey('word-card-practice'),
+                    onPressed: () {
+                      Navigator.of(sheet).pop();
+                      unawaited(notifier.practiceWord(english));
+                    },
+                    icon: const Text('⭐', style: TextStyle(fontSize: 20)),
+                    label: const Text('Praticar'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: NeonColors.orange,
+                      foregroundColor: NeonColors.background,
+                      minimumSize: const Size.fromHeight(52),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

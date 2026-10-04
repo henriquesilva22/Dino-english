@@ -140,6 +140,13 @@ class _DinoAnimatedModelState extends State<DinoAnimatedModel> {
     );
   }
 
+  void _sendAll() {
+    _sendPlaying();
+    _sendTalking();
+    _sendYaw(force: true);
+    _sendPlan();
+  }
+
   void _sendPlaying() => _run(
     '(window.dinoPlaying || function (on) { window.__dinoPlaying = on; })'
     '(${widget.playing})',
@@ -187,12 +194,15 @@ class _DinoAnimatedModelState extends State<DinoAnimatedModel> {
         shadowSoftness: 0.8,
         relatedJs: companionAnimatorJs(model),
         debugLogging: false,
+        // Calls made while the page is still loading are lost when it
+        // replaces the document: the page says when it is ready, and
+        // everything is sent again then.
+        javascriptChannels: {
+          JavascriptChannel('DinoBridge', onMessageReceived: (_) => _sendAll()),
+        },
         onWebViewCreated: (controller) {
           _controller = controller;
-          _sendPlaying();
-          _sendTalking();
-          _sendYaw(force: true);
-          _sendPlan();
+          _sendAll();
         },
       ),
     );
@@ -267,6 +277,9 @@ const String _animatorBody = r'''
     var p = pending || [config.idle, true, config.idle, 1, 0];
     pending = null;
     start(p[0], p[1], p[2], p[3], p[4]);
+    // Ask the app for its current state (clip, facing, camera).
+    snapFacing = true;
+    if (window.DinoBridge) DinoBridge.postMessage('ready');
   });
 
   mv.addEventListener('finished', function () {
@@ -278,7 +291,16 @@ const String _animatorBody = r'''
   // ---- facing ------------------------------------------------------------------
   // Facing/camera sent before this script ran were parked on window.
   var yaw = 0, yawTarget = window.__dinoYaw || 0;
-  window.dinoFace = function (deg) { yawTarget = deg; };
+  // The first facing after loading is applied at once (no visible turn).
+  var snapFacing = false;
+  window.dinoFace = function (deg) {
+    yawTarget = deg;
+    if (snapFacing && ready) {
+      snapFacing = false;
+      yaw = deg;
+      mv.orientation = '0deg 0deg ' + yaw.toFixed(1) + 'deg';
+    }
+  };
   function turn() {
     var d = ((yawTarget - yaw) % 360 + 540) % 360 - 180; // short way round
     if (ready && Math.abs(d) > 0.3) {

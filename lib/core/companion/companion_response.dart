@@ -49,10 +49,104 @@ enum VoiceMode {
 }
 
 class CompanionLine {
-  const CompanionLine(this.text, [this.translation]);
+  const CompanionLine(this.text, [this.translation]) : english = null;
+
+  /// A Portuguese sentence with English inserted ("Eu vou WALK
+  /// amanhã."): [english] lists the English parts, voiced in English;
+  /// the rest is voiced in Portuguese whatever the [VoiceMode]. An empty
+  /// list is a plain Portuguese line.
+  const CompanionLine.mixed(this.text, {this.english = const []})
+    : translation = null;
+
+  /// Parses `*...*` marks as the English parts: `"*Yes!* Muito bem!"`.
+  factory CompanionLine.marked(String marked) {
+    final parts = marked.split('*');
+    final english = [
+      for (var i = 1; i < parts.length; i += 2)
+        if (parts[i].trim().isNotEmpty) parts[i].trim(),
+    ];
+    return CompanionLine.mixed(parts.join(), english: english);
+  }
 
   final String text;
   final String? translation;
+
+  /// Non-null for a [CompanionLine.mixed] line.
+  final List<String>? english;
+
+  bool get isMixed => english != null;
+
+  /// [text] split into its Portuguese and English stretches, in order
+  /// (only for a mixed line; empty stretches dropped).
+  List<LineSegment> get segments => _split(trim: true);
+
+  /// [segments] keeping the spaces and punctuation around them, so they
+  /// join back into [text] (for drawing).
+  List<LineSegment> get displaySegments => _split(trim: false);
+
+  List<LineSegment> _split({required bool trim}) {
+    final words = english;
+    if (words == null) return [LineSegment(text, isEnglish: true)];
+    final spans = <(int, int)>[];
+    final lower = text.toLowerCase();
+    for (final word in words) {
+      final w = word.toLowerCase();
+      var from = 0;
+      while (true) {
+        final at = lower.indexOf(w, from);
+        if (at < 0) break;
+        final end = at + w.length;
+        final bounded =
+            (at == 0 || !_isLetter(lower[at - 1])) &&
+            (end == lower.length || !_isLetter(lower[end]));
+        if (bounded && !spans.any((s) => at < s.$2 && end > s.$1)) {
+          spans.add((at, end));
+        }
+        from = end;
+      }
+    }
+    spans.sort((a, b) => a.$1.compareTo(b.$1));
+    final segments = <LineSegment>[];
+    var cursor = 0;
+    void add(int from, int to, bool isEnglish) {
+      final piece = text.substring(from, to);
+      if (trim && piece.trim().isEmpty) return;
+      if (piece.isEmpty) return;
+      segments.add(
+        LineSegment(trim ? piece.trim() : piece, isEnglish: isEnglish),
+      );
+    }
+
+    for (final (start, end) in spans) {
+      add(cursor, start, false);
+      add(start, end, true);
+      cursor = end;
+    }
+    add(cursor, text.length, false);
+    return segments;
+  }
+
+  static bool _isLetter(String c) => RegExp(r'[a-zà-ú0-9]').hasMatch(c);
+}
+
+/// A stretch of a [CompanionLine] in one language.
+class LineSegment {
+  const LineSegment(this.text, {required this.isEnglish});
+
+  final String text;
+  final bool isEnglish;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LineSegment &&
+      other.text == text &&
+      other.isEnglish == isEnglish;
+
+  @override
+  int get hashCode => Object.hash(text, isEnglish);
+
+  @override
+  String toString() => '${isEnglish ? 'en' : 'pt'}:"$text"';
 }
 
 /// Everything the UI (and later voice/3D) needs from one interaction.

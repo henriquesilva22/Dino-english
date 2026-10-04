@@ -21,6 +21,11 @@ enum DinoMemoryKind {
 
   /// key = fact name (`child_name`, `child_age`), value = fact.
   fact,
+
+  /// An English word met in the Dino's Portuguese sentences ("Eu vou
+  /// WALK amanhã"). key = the English word, value = its `WordMastery`
+  /// as JSON (level, repetitions, last seen), confidence = level / 4.
+  wordMastery,
 }
 
 class DinoMemory {
@@ -185,6 +190,23 @@ class DinoMemoryBank {
       confidence: 0.1,
     );
   }
+
+  // ---- words met in hybrid sentences ---------------------------------------
+
+  /// The stored mastery JSON of [englishWord], or null if never met.
+  String? wordMastery(String englishWord) =>
+      recall(DinoMemoryKind.wordMastery, englishWord.toLowerCase())?.value;
+
+  Future<void> saveWordMastery(
+    String englishWord,
+    String json, {
+    required double confidence,
+  }) => _upsert(
+    DinoMemoryKind.wordMastery,
+    englishWord.toLowerCase(),
+    json,
+    confidence: confidence,
+  );
 
   // ---- words taught by the child (unofficial) -----------------------------
 
