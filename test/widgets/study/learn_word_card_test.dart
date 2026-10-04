@@ -18,7 +18,12 @@ class _FakeSpeechService implements SpeechService {
   ValueListenable<Object?> get activeUtterance => ValueNotifier(null);
 
   @override
-  Future<SpeechResult> speak(String text) async => SpeechResult.spoken;
+  Future<SpeechResult> speak(
+    String text, {
+    String locale = kEnglishLocale,
+    double? rate,
+    double? pitch,
+  }) async => SpeechResult.spoken;
 
   @override
   Future<void> stop() async {}

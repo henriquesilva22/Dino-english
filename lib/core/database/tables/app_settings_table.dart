@@ -11,6 +11,10 @@ class AppSettings extends Table {
   BoolColumn get onboardingCompleted =>
       boolean().withDefault(const Constant(false))();
 
+  /// The child already fed the Dino once by dragging (v5): the "drag it
+  /// to the mouth" hint is not shown again.
+  BoolColumn get foodHintSeen => boolean().withDefault(const Constant(false))();
+
   @override
   Set<Column> get primaryKey => {id};
 }

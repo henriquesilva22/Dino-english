@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../core/companion/model/companion_model.dart';
 import '../../theme/neon_colors.dart';
 import '../pet_model_viewer.dart';
 import 'egg_idle_pulse.dart';
-
-const String _kDinoBabyAsset = 'assets/models/dino/Dino_Baby_v2_animado.glb';
 
 /// The Home's centerpiece: the baby Dino, front and center from level 1 --
 /// no egg gating. [EggIdlePulse] is reused as-is (it's already
@@ -78,12 +77,15 @@ class DinoShowcase extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: const Padding(
-                        padding: EdgeInsets.all(20),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
                         child: PetModelViewer(
-                          modelAsset: _kDinoBabyAsset,
+                          modelAsset: CompanionModel.dino.asset,
                           label: 'Dino bebê',
                           height: 190,
+                          animationName: CompanionModel.dino
+                              .clip(CompanionAnim.idle)
+                              ?.name,
                         ),
                       ),
                     ),

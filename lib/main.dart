@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/app_route_observer.dart';
 import 'core/orientation_lock.dart';
 import 'providers/database_providers.dart';
 import 'screens/app_shell_screen.dart';
@@ -27,6 +28,7 @@ class DinoEnglishApp extends StatelessWidget {
     return MaterialApp(
       title: 'Dino English',
       theme: neonThemeData,
+      navigatorObservers: [appRouteObserver],
       home: const _AppBootstrapGate(),
     );
   }

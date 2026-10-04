@@ -5,6 +5,7 @@ import '../theme/neon_colors.dart';
 import 'animated_glow.dart';
 import 'home/tap_scale.dart';
 import 'neon_border.dart';
+import 'pet_preview.dart';
 
 /// One grid cell in the pet selection screen: preview image + name,
 /// glowing when selected.
@@ -37,10 +38,7 @@ class PetCatalogTile extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: Image.asset(pet.previewAsset, fit: BoxFit.contain),
-            ),
+            AspectRatio(aspectRatio: 1, child: PetPreview(pet: pet)),
             const SizedBox(height: 4),
             Text(
               pet.displayName,

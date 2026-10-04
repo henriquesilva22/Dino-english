@@ -364,4 +364,36 @@ void main() {
     expect(attempts[1].sessionKind, 'review');
     expect(attempts[1].xpAwarded, 5);
   });
+
+  test('coins: +5 per correct exercise, +15 once when the day is active, '
+      'none for wrong answers or companion care', () async {
+    await _insertWord(database, 'word.a');
+    await _seedProfile(database);
+    Future<AnswerResult> answer({
+      required bool correct,
+      bool exercise = true,
+    }) => repository.recordAnswer(
+      wordId: 'word.a',
+      wasCorrect: correct,
+      exerciseType: 'multiple_choice',
+      sessionKind: SessionKind.study,
+      sessionId: 's1',
+      countsAsExercise: exercise,
+      now: DateTime(2026, 1, 1, 10),
+    );
+
+    final start =
+        (await database.select(database.userProfile).getSingle()).coins;
+    expect((await answer(correct: true)).coinsAwarded, 5);
+    expect((await answer(correct: false)).coinsAwarded, 0);
+    expect((await answer(correct: true, exercise: false)).coinsAwarded, 0);
+
+    var earned = 5;
+    for (var i = 0; i < 20; i++) {
+      earned += (await answer(correct: true)).coinsAwarded;
+    }
+    expect(earned, 21 * 5 + 15);
+    final end = (await database.select(database.userProfile).getSingle()).coins;
+    expect(end - start, earned);
+  });
 }

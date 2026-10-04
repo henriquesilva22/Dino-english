@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../game/pets/pet_catalog.dart';
 import '../game/sound/adventure_sound_service.dart';
 
-PetDefinition selectedPetOrFallback(String id) =>
-    kPetCatalog.firstWhere((p) => p.id == id, orElse: () => kPetCatalog.first);
+PetDefinition selectedPetOrFallback(String id) => kPlayablePets.firstWhere(
+  (p) => p.id == id,
+  orElse: () => kPetCatalog.first,
+);
 
 class SelectedPetIdNotifier extends Notifier<String> {
   @override

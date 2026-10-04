@@ -48,6 +48,8 @@ dependencies:
   sherpa_onnx: ^1.13.8
   record: ^7.1.1
   webview_flutter: ^4.14.1
+  permission_handler: ^12.0.1
+  audioplayers: ^6.5.1
 
 dev_dependencies:
   flutter_test:
@@ -77,15 +79,25 @@ flutter:
   assets:
     - assets/seed/words_seed.json
     - assets/models/egg/Egg_Asset_v04.glb
-    - assets/models/dino/Dino_Baby_v2_animado.glb
+    # The companion: built from assets/glbs/ by tool/build_companion_model.js.
+    - assets/models/dino/dino_companion.glb
     # Offline voice model, fetched by tool/download_voice_model.sh.
     - assets/models/voice/
+    # Portuguese voice (Piper/VITS): espeak data + the bundled voice,
+    # fetched by tool/download_voice_model.sh.
+    - assets/models/voice_pt/espeak-ng-data/
+    - assets/models/voice_pt/espeak-ng-data/lang/roa/
+    - assets/models/voice_pt/faber/
+    - assets/models/voice_pt/razo/
     - assets/sprites/map/Sprites/Tiles/Default/
-    - assets/sprites/map/Sprites/Backgrounds/Default/
+    # Pet Adventure scenery (the old Kenney background layers were removed).
+    - assets/sprites/map/fundo do jogo.jpg
     - assets/sprites/map/Sounds/
     - assets/sprites/characters/Models/GLB/
     - assets/sprites/characters/Previews/
     - assets/sounds/
+    # Bedroom (Kenney Furniture Kit renders, CC0).
+    - assets/sprites/room/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -1,6 +1,7 @@
 import '../brain/model/dino_enums.dart';
 import '../utils/date_key.dart';
 import 'companion_state.dart';
+import 'food/food_item.dart';
 
 enum CareResult {
   /// The care was applied.
@@ -53,6 +54,9 @@ class CompanionNeedsService {
   /// speed meanwhile.
   static const double sleepEnergyPerHour = 25;
 
+  /// Put to bed already full of energy, it naps this long.
+  static const double fullNapHours = 1;
+
   /// Long absences are capped: coming back after a week finds a hungry
   /// Dino, not a ruined one.
   static const Duration maxCatchUp = Duration(hours: 36);
@@ -85,12 +89,18 @@ class CompanionNeedsService {
 
     if (state.isSleeping) {
       final energy = state.energy + sleepEnergyPerHour * hours;
+      // Wakes up by itself when sleep fills its energy -- or after a long
+      // nap if it went to bed already full (otherwise it would wake up
+      // the very next second).
+      final filledNow =
+          state.energy < CompanionState.max && energy >= CompanionState.max;
+      final restedLongNap =
+          state.energy >= CompanionState.max && hours >= fullNapHours;
       return state.copyWith(
         hunger: down(state.hunger, hungerPerHour / 2),
         thirst: down(state.thirst, thirstPerHour / 2),
         energy: energy,
-        // Fully rested: the Dino wakes up by itself.
-        isSleeping: energy < CompanionState.max,
+        isSleeping: !(filledNow || restedLongNap),
         updatedAt: now,
       );
     }
@@ -103,8 +113,15 @@ class CompanionNeedsService {
     );
   }
 
-  /// Applies [care] to an already-decayed [state].
-  CareOutcome applyCare(CompanionState state, DinoCare care, DateTime now) {
+  /// Applies [care] to an already-decayed [state]. A [food] given by
+  /// dragging sets how much it feeds, cheers and pays (default meal
+  /// otherwise).
+  CareOutcome applyCare(
+    CompanionState state,
+    DinoCare care,
+    DateTime now, {
+    FoodItem? food,
+  }) {
     if (state.isSleeping && care != DinoCare.sleep) {
       return CareOutcome(
         state: state,
@@ -131,10 +148,10 @@ class CompanionNeedsService {
       case DinoCare.feed:
         if (state.hunger >= 95) return unchanged(CareResult.notNeeded);
         next = state.copyWith(
-          hunger: state.hunger + 20,
-          happiness: state.happiness + 5,
+          hunger: state.hunger + (food?.hungerRestore ?? 20),
+          happiness: state.happiness + (food?.happinessReward ?? 5),
         );
-        baseXp = feedXp;
+        baseXp = food?.xpReward ?? feedXp;
       case DinoCare.water:
         if (state.thirst >= 95) return unchanged(CareResult.notNeeded);
         next = state.copyWith(

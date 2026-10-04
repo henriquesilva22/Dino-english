@@ -587,7 +587,16 @@ class IntentDetector {
           TeachTranslationQuestion() ||
           ChildNameQuestion() ||
           ChildFeelingQuestion():
-        if (match != null &&
+        // Waiting for one word ("Say: play!", a quiz): a short plain reply
+        // IS the answer, even "play" or "eat" -- only goodbye/help win.
+        final shortAnswer =
+            (pending is QuizQuestion || pending is RepeatWordQuestion) &&
+            !isQuestion &&
+            text.split(' ').length <= 2 &&
+            match?.intent != DinoIntent.farewell &&
+            match?.intent != DinoIntent.askHelp;
+        if (!shortAnswer &&
+            match != null &&
             _overridePending.contains(match.intent) &&
             !(match.intent == DinoIntent.askWordMeaning &&
                 match.rule == 'meaning_what_is' &&

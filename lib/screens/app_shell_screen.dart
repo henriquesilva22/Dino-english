@@ -29,6 +29,18 @@ class _AppShellScreenState extends ConsumerState<AppShellScreen> {
     });
     final selected = ref.watch(selectedTabIndexProvider);
 
+    // System back on a tab goes to the previous tab (then Home), never
+    // straight out of the app; only Home lets the back leave.
+    return PopScope(
+      canPop: selected == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) ref.read(selectedTabIndexProvider.notifier).back();
+      },
+      child: _shell(selected),
+    );
+  }
+
+  Widget _shell(int selected) {
     return Scaffold(
       body: IndexedStack(
         index: selected,

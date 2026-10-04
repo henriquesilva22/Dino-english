@@ -1,19 +1,49 @@
-/// Static catalog of the 24 Kenney 3D animals available as Pet Adventure
-/// companions. Purely local data -- no persistence, no business rule.
+import '../../core/companion/model/companion_model.dart';
+
+/// Static catalog of the Pet Adventure companions: the player's own 3D Dino
+/// ([kDinoPet]) plus the 24 Kenney 3D animals ([kPetCatalog]). Purely
+/// local data -- no persistence, no business rule.
 class PetDefinition {
   const PetDefinition({
     required this.id,
     required this.displayName,
     required this.modelAsset,
-    required this.previewAsset,
+    this.previewAsset,
+    this.companionModel,
+    this.emoji = '🐾',
   });
 
   final String id;
   final String displayName;
   final String modelAsset;
-  final String previewAsset;
+
+  /// 2D picture (the animals' Kenney previews); null for the 3D Dino.
+  final String? previewAsset;
+
+  /// Set for a pet played as its animated 3D model (the Dino), drawn over
+  /// the game instead of a 2D sprite.
+  final CompanionModel? companionModel;
+
+  /// Stands in for [previewAsset] where there is no picture.
+  final String emoji;
+
+  bool get is3D => companionModel != null;
 }
 
+/// The companion Dino -- the same animated 3D model as "Brincar com o
+/// Dino" -- as a playable Pet Adventure character.
+const PetDefinition kDinoPet = PetDefinition(
+  id: 'dino',
+  displayName: 'Dino',
+  modelAsset: 'assets/models/dino/dino_companion.glb',
+  companionModel: CompanionModel.dino,
+  emoji: '🦖',
+);
+
+/// Everything the player can pick: the Dino first, then the animals.
+const List<PetDefinition> kPlayablePets = [kDinoPet, ...kPetCatalog];
+
+/// The 24 Kenney animals (2D previews + 3D models).
 const List<PetDefinition> kPetCatalog = [
   PetDefinition(
     id: 'beaver',

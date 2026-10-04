@@ -1,6 +1,7 @@
-import '../brain/intent/intent.dart';
 import '../brain/model/dino_enums.dart';
 import 'companion_state.dart';
+import 'engine/companion_entity.dart';
+import 'engine/companion_intent.dart';
 
 /// How the Dino feels right now (drives its face/idle pose).
 enum CompanionEmotion { happy, content, sad, hungry, thirsty, sleepy, excited }
@@ -19,6 +20,9 @@ enum CompanionAnimation {
   drinking,
   playing,
   sleeping,
+
+  /// Walking somewhere (to its bed).
+  walking,
   talking,
   celebrating,
 
@@ -31,6 +35,19 @@ enum CompanionAnimation {
 
 /// One thing the Dino says: English [text] (spoken) and an optional
 /// Portuguese [translation] (subtitle only).
+/// Which voice reads a reply. The Portuguese meaning is always on screen;
+/// the Dino only *speaks* Portuguese when there is a reason.
+enum VoiceMode {
+  /// The usual: English spoken, Portuguese shown.
+  english,
+
+  /// Spoken in Portuguese (the child asked for it / didn't understand).
+  portuguese,
+
+  /// English, then its Portuguese meaning (translation, explanation).
+  bilingual,
+}
+
 class CompanionLine {
   const CompanionLine(this.text, [this.translation]);
 
@@ -50,9 +67,14 @@ class CompanionResponse {
     this.care,
     this.xpReward = 0,
     this.vocabulary = const [],
+    this.detectedWords = const [],
+    this.detectedEntity,
     this.suggestions = const [],
     this.activity,
     this.isWaitingForAnswer = false,
+    this.shouldListenAgain = true,
+    this.voice = VoiceMode.english,
+    this.coinReward = 0,
   });
 
   final List<CompanionLine> lines;
@@ -62,10 +84,10 @@ class CompanionResponse {
   /// The pet's state after this interaction (already persisted).
   final CompanionState state;
 
-  /// How the child's text was understood (null for care buttons).
-  final DinoIntent? intent;
+  /// How the child's sentence was understood (null for care buttons).
+  final CompanionIntent? intent;
 
-  /// The care applied, if any (button or "eat an apple").
+  /// The care applied, if any (button or "come uma maçã").
   final DinoCare? care;
 
   /// XP actually granted by this interaction.
@@ -74,6 +96,12 @@ class CompanionResponse {
   /// English words taught/practised in this interaction.
   final List<String> vocabulary;
 
+  /// Official English words heard in the child's sentence.
+  final List<String> detectedWords;
+
+  /// The thing the sentence was about (APPLE, DOG...).
+  final CompanionEntity? detectedEntity;
+
   /// Quick replies for the Dino's question, if it asked one.
   final List<String> suggestions;
 
@@ -81,15 +109,59 @@ class CompanionResponse {
   final DinoActivity? activity;
   final bool isWaitingForAnswer;
 
-  /// Everything said, in English (what TTS reads).
-  String get text => lines.map((l) => l.text).join(' ');
+  /// False when the conversation pauses (goodbye, opening a game): the
+  /// microphone stops until the child taps it.
+  final bool shouldListenAgain;
+
+  /// How the voice reads [lines].
+  final VoiceMode voice;
+
+  /// 🪙 coins earned (the controller adds them to the wallet).
+  final int coinReward;
+
+  /// Whether the voice should say [englishText].
+  bool get shouldSpeak => lines.isNotEmpty;
+
+  /// Everything said, in English (what TTS reads) -- always first.
+  String get englishText => lines.map((l) => l.text).join(' ');
 
   /// The Portuguese subtitles, or null when there are none.
-  String? get translation {
+  String? get portugueseText {
     final parts = [
       for (final l in lines)
         if (l.translation != null) l.translation!,
     ];
     return parts.isEmpty ? null : parts.join(' ');
   }
+
+  /// Short names kept for the UI and tests.
+  String get text => englishText;
+  String? get translation => portugueseText;
+
+  CompanionResponse copyWith({
+    CompanionIntent? intent,
+    CompanionAnimation? animation,
+    List<String>? detectedWords,
+    CompanionEntity? detectedEntity,
+    bool? shouldListenAgain,
+    VoiceMode? voice,
+    List<CompanionLine>? lines,
+  }) => CompanionResponse(
+    lines: lines ?? this.lines,
+    emotion: emotion,
+    animation: animation ?? this.animation,
+    state: state,
+    intent: intent ?? this.intent,
+    care: care,
+    xpReward: xpReward,
+    vocabulary: vocabulary,
+    detectedWords: detectedWords ?? this.detectedWords,
+    detectedEntity: detectedEntity ?? this.detectedEntity,
+    suggestions: suggestions,
+    activity: activity,
+    isWaitingForAnswer: isWaitingForAnswer,
+    shouldListenAgain: shouldListenAgain ?? this.shouldListenAgain,
+    voice: voice ?? this.voice,
+    coinReward: coinReward,
+  );
 }

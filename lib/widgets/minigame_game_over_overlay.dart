@@ -7,6 +7,7 @@ import '../providers/minigame_providers.dart';
 import '../providers/pet_adventure_providers.dart';
 import '../screens/pet_adventure_game_screen.dart';
 import '../theme/neon_colors.dart';
+import 'pet_preview.dart';
 import 'glow_button.dart';
 import 'minigame_stat_row.dart';
 import 'neon_panel.dart';
@@ -60,7 +61,7 @@ class MinigameGameOverOverlay extends ConsumerWidget {
                       curve: Curves.elasticOut,
                       builder: (context, scale, child) =>
                           Transform.scale(scale: scale, child: child),
-                      child: Image.asset(pet.previewAsset, height: 88),
+                      child: PetPreview(pet: pet, height: 88),
                     ),
                     const SizedBox(height: 8),
                     Text(

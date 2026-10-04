@@ -5,16 +5,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/companion/animation/companion_animation_controller.dart';
+import '../core/companion/companion_state_machine.dart';
+import '../core/companion/model/companion_model.dart';
 import '../core/database/app_database.dart';
 import '../core/orientation_lock.dart';
 import '../game/boss_fight_state.dart';
 import '../game/minigame_round_state.dart';
 import '../game/pet_adventure_game.dart';
+import '../game/pet_component.dart';
 import '../game/sound/adventure_sfx.dart';
 import '../game/sound/adventure_sound_service.dart';
 import '../providers/minigame_providers.dart';
 import '../providers/pet_adventure_providers.dart';
 import '../theme/neon_colors.dart';
+import '../widgets/companion/dino_animated_model.dart';
 import '../widgets/home/tap_scale.dart';
 import '../widgets/minigame_game_over_overlay.dart';
 import '../widgets/minigame_hud.dart';
@@ -177,6 +182,18 @@ class _PetAdventurePlayAreaState extends ConsumerState<_PetAdventurePlayArea> {
     widget.onGameCreated(_game);
   }
 
+  /// Shots fired (the 3D Dino punches with each) and when the last one was.
+  int _shotSerial = 0;
+  DateTime _shotAt = DateTime(0);
+
+  void _shoot() {
+    if (!_game.shoot()) return;
+    setState(() {
+      _shotSerial++;
+      _shotAt = DateTime.now();
+    });
+  }
+
   /// The single official way this screen leaves the game: end the
   /// session (pauses, stops music -- awaited, so it's actually done
   /// before anything else happens), restore portrait eagerly (don't rely
@@ -223,9 +240,42 @@ class _PetAdventurePlayAreaState extends ConsumerState<_PetAdventurePlayArea> {
     // non-positioned child sizes *itself* to that child's intrinsic size
     // (here, the HUD's thin top bar) instead of filling the Scaffold --
     // which was squashing the whole game into a ~110px strip.
+    final playing = !isGameOver && !bossVictory;
+    // The pet moves only with ⬆️/⬇️ (buttons or arrow keys); touching the
+    // game itself does nothing.
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyUpEvent) return KeyEventResult.ignored;
+        if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          _game.moveUp();
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+          _game.moveDown();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: _playArea(isGameOver, bossVictory, playing),
+    );
+  }
+
+  Widget _playArea(bool isGameOver, bool bossVictory, bool playing) {
+    final pet = _game.pet;
     return Stack(
       children: [
-        Positioned.fill(child: GameWidget(game: _game)),
+        Positioned.fill(child: GameWidget(game: _game, autofocus: false)),
+        if (pet.companionModel case final model?)
+          Positioned.fill(
+            child: _Dino3DRunner(
+              game: _game,
+              model: model,
+              playing: playing,
+              shotSerial: _shotSerial,
+              shotAt: _shotAt,
+            ),
+          ),
         Positioned(
           top: 0,
           left: 0,
@@ -235,16 +285,16 @@ class _PetAdventurePlayAreaState extends ConsumerState<_PetAdventurePlayArea> {
             onExit: () => unawaited(_exitGame()),
           ),
         ),
-        if (!isGameOver && !bossVictory) ...[
+        if (playing) ...[
           Positioned(
             right: 20,
             bottom: 28,
-            child: _ShootButton(onShoot: _game.shoot),
+            child: _ShootButton(onShoot: _shoot),
           ),
           Positioned(
-            left: 20,
-            bottom: 28,
-            child: _DropThroughButton(onDrop: _game.dropThrough),
+            left: 16,
+            bottom: 20,
+            child: _LaneArrows(onUp: _game.moveUp, onDown: _game.moveDown),
           ),
         ],
         if (bossVictory)
@@ -296,28 +346,162 @@ class _ShootButton extends StatelessWidget {
   }
 }
 
-/// Bottom-left control that makes the pet quickly drop through the
-/// elevated platform it's currently standing on. Placed opposite the
-/// shoot button for comfortable two-thumb landscape play.
-class _DropThroughButton extends StatelessWidget {
-  const _DropThroughButton({required this.onDrop});
+/// The only controls that move the pet: ⬆️ (one lane up) and ⬇️
+/// (one lane down), stacked bottom-left, big enough for little
+/// thumbs, opposite the shoot button. React on touch-down: no waiting for
+/// the finger to lift.
+class _LaneArrows extends StatelessWidget {
+  const _LaneArrows({required this.onUp, required this.onDown});
 
-  final VoidCallback onDrop;
+  final VoidCallback onUp;
+  final VoidCallback onDown;
 
   @override
   Widget build(BuildContext context) {
-    return TapScale(
-      onTap: onDrop,
-      child: NeonBorder(
-        color: NeonColors.purple,
-        radius: 32,
-        child: Container(
-          width: 64,
-          height: 64,
-          color: NeonColors.surface.withValues(alpha: 0.75),
-          alignment: Alignment.center,
-          child: const Text('⬇️', style: TextStyle(fontSize: 28)),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _ArrowButton(
+          key: const ValueKey('lane-up'),
+          label: '⬆️',
+          onPressed: onUp,
         ),
+        const SizedBox(height: 12),
+        _ArrowButton(
+          key: const ValueKey('lane-down'),
+          label: '⬇️',
+          onPressed: onDown,
+        ),
+      ],
+    );
+  }
+}
+
+class _ArrowButton extends StatefulWidget {
+  const _ArrowButton({required this.label, required this.onPressed, super.key});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  State<_ArrowButton> createState() => _ArrowButtonState();
+}
+
+class _ArrowButtonState extends State<_ArrowButton> {
+  bool _down = false;
+
+  void _set(bool down) {
+    if (_down != down) setState(() => _down = down);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) {
+        _set(true);
+        widget.onPressed();
+      },
+      onTapUp: (_) => _set(false),
+      onTapCancel: () => _set(false),
+      child: AnimatedScale(
+        scale: _down ? 0.9 : 1,
+        duration: const Duration(milliseconds: 90),
+        child: NeonBorder(
+          color: NeonColors.purple,
+          radius: 36,
+          child: Container(
+            width: 72,
+            height: 72,
+            color: NeonColors.surface.withValues(alpha: 0.75),
+            alignment: Alignment.center,
+            child: Text(widget.label, style: const TextStyle(fontSize: 34)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The player's 3D Dino drawn over the game where its (invisible) Flame
+/// body is: running on its lane facing right, hopping between lanes,
+/// punching with every shot -- the same model and animation layer as the
+/// companion screen ([CompanionAnimationController]).
+class _Dino3DRunner extends StatelessWidget {
+  const _Dino3DRunner({
+    required this.game,
+    required this.model,
+    required this.playing,
+    required this.shotSerial,
+    required this.shotAt,
+  });
+
+  final PetAdventureGame game;
+  final CompanionModel model;
+  final bool playing;
+  final int shotSerial;
+  final DateTime shotAt;
+
+  /// Facing right: where the words come from.
+  static const double _yaw = 90;
+
+  CompanionClipPlan _plan(PetPose pose) {
+    final animations = CompanionAnimationController(model);
+    if (!playing) return animations.plan(CompanionActivity.idle);
+    if (pose.changingLane) {
+      // The hop fits the lane change.
+      final jump = model.clip(CompanionAnim.jump)?.seconds ?? 1;
+      final scale = (jump / game.difficulty.laneChangeSeconds).clamp(1.0, 2.0);
+      return animations.plan(
+        CompanionActivity.jumping,
+        rest: CompanionActivity.running,
+        timeScale: (scale * 10).round() / 10,
+        serial: pose.laneSerial,
+      );
+    }
+    final attack = model.clip(CompanionAnim.attack)?.seconds ?? 1;
+    final sinceShot = DateTime.now().difference(shotAt).inMilliseconds / 1000;
+    if (sinceShot < attack) {
+      return animations.plan(
+        CompanionActivity.attacking,
+        rest: CompanionActivity.running,
+        serial: shotSerial,
+      );
+    }
+    return animations.plan(CompanionActivity.running);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final view = PetComponent.viewSizeFor(
+            Vector2(constraints.maxWidth, constraints.maxHeight),
+          );
+          final feet = model.camera.feetFraction;
+          return ValueListenableBuilder<PetPose?>(
+            valueListenable: game.petPose,
+            builder: (context, pose, _) {
+              if (pose == null) return const SizedBox.shrink();
+              return Stack(
+                children: [
+                  Positioned(
+                    left: pose.feet.dx - view / 2,
+                    top: pose.feet.dy - view * feet,
+                    child: DinoAnimatedModel(
+                      model: model,
+                      size: view,
+                      plan: _plan(pose),
+                      yaw: _yaw,
+                      playing: true,
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }

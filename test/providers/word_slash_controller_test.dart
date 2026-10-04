@@ -321,7 +321,18 @@ void main() {
         }
       }
 
-      final attempts = await database.select(database.exerciseAttempts).get();
+      // The answers are written by real (async) DB transactions: wait for
+      // them instead of a fixed number of event-loop turns, which was
+      // flaky when the whole suite runs in parallel.
+      var attempts = await database.select(database.exerciseAttempts).get();
+      for (
+        var t = 0;
+        t < 100 && attempts.where((a) => a.wasCorrect).length < 4;
+        t++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        attempts = await database.select(database.exerciseAttempts).get();
+      }
       expect(attempts.where((a) => a.wasCorrect), hasLength(4));
     },
   );

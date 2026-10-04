@@ -7,7 +7,7 @@ import 'package:dino_english/core/brain/memory/dino_memory.dart';
 import 'package:dino_english/core/brain/vocabulary/official_vocabulary.dart';
 
 /// The real bundled word bank, parsed straight from the seed JSON (no
-/// database), so brain tests exercise the actual 240-word vocabulary.
+/// database), so brain tests exercise the actual 267-word vocabulary.
 OfficialVocabulary loadSeedVocabulary() {
   final json =
       jsonDecode(File('assets/seed/words_seed.json').readAsStringSync())

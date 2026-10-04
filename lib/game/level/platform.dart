@@ -9,7 +9,7 @@ class Platform {
     required this.top,
   });
 
-  /// 'ground' | 'mid' | 'high'.
+  /// 'ground' (the painted path) | 'mid' | 'high'.
   final String id;
   final double left;
   final double right;

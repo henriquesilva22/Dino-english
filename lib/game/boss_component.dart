@@ -25,7 +25,8 @@ class BossComponent extends PositionComponent
 
   final PetDefinition pet;
 
-  late final Sprite _sprite = Sprite(Flame.images.fromCache(pet.previewAsset));
+  // Bosses are always 2D animals (see pickBossPet).
+  late final Sprite _sprite = Sprite(Flame.images.fromCache(pet.previewAsset!));
 
   /// How far above the ground the boss patrols, in world units -- roughly
   /// up to the `high` platform's height, so it moves through the same

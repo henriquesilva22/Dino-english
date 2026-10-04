@@ -53,6 +53,14 @@ void main() {
       expect(rested.isSleeping, isFalse);
     });
 
+    test('put to bed already full, it keeps sleeping for a nap', () {
+      final full = state(energy: 100, isSleeping: true);
+      final soon = service.decay(full, t0.add(const Duration(minutes: 5)));
+      expect(soon.isSleeping, isTrue);
+      final later = service.decay(full, t0.add(const Duration(hours: 2)));
+      expect(later.isSleeping, isFalse);
+    });
+
     test('a clock going backwards changes nothing', () {
       final s = service.decay(state(), t0.subtract(const Duration(hours: 5)));
       expect(s.hunger, 50);

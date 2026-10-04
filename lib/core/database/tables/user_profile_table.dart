@@ -18,6 +18,10 @@ class UserProfile extends Table {
   TextColumn get lastStudyDate => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
 
+  /// 🪙 coins earned by studying and spent on the Dino's food (v5). New
+  /// players start with enough for their first treat.
+  IntColumn get coins => integer().withDefault(const Constant(30))();
+
   @override
   Set<Column> get primaryKey => {id};
 }

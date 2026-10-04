@@ -1,14 +1,24 @@
 import 'dart:async' show unawaited;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/brain/context/conversation_context.dart';
 import '../core/brain/model/dino_enums.dart';
+import '../core/app_route_observer.dart';
+import '../core/companion/animation/companion_animation_controller.dart';
+import '../core/companion/animation/mouth_animation_controller.dart';
 import '../core/companion/companion_engine.dart';
 import '../core/companion/companion_response.dart';
 import '../core/companion/companion_state.dart';
-import '../core/companion/dino_model_clips.dart';
+import '../core/companion/companion_state_machine.dart';
+import '../core/companion/interaction/companion_interaction_controller.dart';
+import '../core/companion/model/companion_model.dart';
+import '../core/companion/food/food_item.dart';
+import '../core/companion/voice/companion_voice_service.dart';
+import '../core/companion/voice/speech_recognition_service.dart';
 import '../core/single_navigation_guard.dart';
 import '../providers/dino_chat_providers.dart';
 import '../providers/navigation_providers.dart';
@@ -16,12 +26,21 @@ import '../providers/speech_providers.dart';
 import '../theme/neon_colors.dart';
 import '../widgets/exit_top_bar.dart';
 import '../widgets/neon_background.dart';
+import '../widgets/companion/ball_arena.dart';
+import '../widgets/companion/bedroom.dart';
 import '../widgets/companion/dino_animated_model.dart';
+import '../widgets/companion/food_drag.dart';
+import '../widgets/companion/food_panel.dart';
+import '../widgets/companion/hearts_burst.dart';
 import 'exam_screen.dart';
 import 'sentence_builder_screen.dart';
 import 'word_slash_game_screen.dart';
 
-const String _kDinoBabyAsset = 'assets/models/dino/Dino_Baby_v2_animado.glb';
+/// The companion's 3D model (swap it here; nothing else names a file).
+const CompanionModel _kDinoModel = CompanionModel.dino;
+
+/// Size of the (square) 3D Dino view on the companion screen.
+const double _kDinoSize = 240;
 
 /// "Brincar com o Dino": the virtual companion. The child talks to the
 /// Dino by text, feeds it, gives it water, plays and puts it to bed --
@@ -34,13 +53,72 @@ class DinoChatScreen extends ConsumerStatefulWidget {
   ConsumerState<DinoChatScreen> createState() => _DinoChatScreenState();
 }
 
-class _DinoChatScreenState extends ConsumerState<DinoChatScreen> {
+class _DinoChatScreenState extends ConsumerState<DinoChatScreen>
+    with WidgetsBindingObserver, RouteAware {
   final _input = TextEditingController();
+
+  /// The microphone is open only while the app is in the foreground and
+  /// this screen is the visible route (not covered by a game, the history
+  /// sheet, the lock screen...).
+  bool _appVisible = true;
+  bool _routeVisible = true;
+  ModalRoute<void>? _route;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != _route) {
+      if (_route != null) appRouteObserver.unsubscribe(this);
+      _route = route;
+      if (route != null) appRouteObserver.subscribe(this, route);
+    }
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    appRouteObserver.unsubscribe(this);
     _input.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Background, screen locked, task switcher... -> close the mic.
+    _appVisible = state == AppLifecycleState.resumed;
+    _syncForeground();
+  }
+
+  @override
+  void didPushNext() {
+    _routeVisible = false;
+    _syncForeground();
+  }
+
+  @override
+  void didPopNext() {
+    _routeVisible = true;
+    _syncForeground();
+  }
+
+  void _syncForeground() => unawaited(
+    ref
+        .read(dinoChatProvider.notifier)
+        .setForeground(_appVisible && _routeVisible),
+  );
+
+  /// "Comer": pick a food (or buy one), then drag it to the Dino.
+  Future<void> _openFoodPanel() async {
+    final food = await showFoodPanel(context);
+    if (food == null || !mounted) return;
+    await ref.read(dinoChatProvider.notifier).selectFood(food);
   }
 
   void _send([String? text]) {
@@ -114,9 +192,16 @@ class _DinoChatScreenState extends ConsumerState<DinoChatScreen> {
 
     final companion = chat.companion;
     final canAct = chat.isReady && !chat.isThinking;
+    // Back (system or ✕) closes one thing at a time: the ball game, the
+    // bedroom or the offered food first; only then the screen itself.
     return PopScope(
+      canPop: !notifier.hasOpenActivity,
       onPopInvokedWithResult: (didPop, result) {
-        if (didPop) unawaited(ref.read(companionVoiceServiceProvider).stop());
+        if (didPop) {
+          unawaited(ref.read(companionVoiceServiceProvider).stop());
+        } else {
+          notifier.back();
+        }
       },
       child: Scaffold(
         body: NeonBackground(
@@ -126,7 +211,8 @@ class _DinoChatScreenState extends ConsumerState<DinoChatScreen> {
               children: [
                 ExitTopBar(
                   title: 'Brincar com o Dino',
-                  onExit: () => Navigator.of(context).pop(),
+                  // Same rule as the system back (PopScope above).
+                  onExit: () => Navigator.of(context).maybePop(),
                 ),
                 if (companion != null)
                   _NeedsBar(state: companion, xpEarned: chat.xpEarned),
@@ -139,13 +225,47 @@ class _DinoChatScreenState extends ConsumerState<DinoChatScreen> {
                               ? CompanionAnimation.idle
                               : CompanionEngine.idleAnimationFor(companion),
                           response: chat.lastResponse,
-                          status: chat.isListening
-                              ? '🎤 Ouvindo...'
-                              : chat.isTranscribing || chat.isThinking
-                              ? '...'
-                              : null,
+                          status: chat.isThinking ? '...' : null,
+                          lookToken: chat.lookToken,
+                          chewToken: chat.chewToken,
+                          offered: chat.offered,
+                          offeredFood: chat.offeredFood,
+                          foodHint: chat.foodHint,
+                          heartsToken: chat.heartsToken,
+                          sleeping: companion?.isSleeping ?? false,
+                          xpBurst: chat.xpBurst,
+                          xpAmount: chat.lastResponse?.xpReward ?? 0,
+                          onDeliver: () => unawaited(notifier.deliverOffered()),
+                          onBallNoticed: (dragging) => unawaited(
+                            notifier.noticeBall(dragging: dragging),
+                          ),
+                          onKick: () => unawaited(notifier.kickBall()),
+                          bedroom: chat.bedroom,
+                          walkingToBed: chat.walkingToBed,
+                          ballGame: chat.ballGame,
+                          onGoToBed: () => unawaited(notifier.goToBed()),
+                          onBallHit: (combo) =>
+                              unawaited(notifier.ballHit(combo)),
+                          onBallStopped: (lost) =>
+                              unawaited(notifier.ballStopped(lost)),
+                          onStopBall: (hits, best, played) => unawaited(
+                            notifier.stopBallGame(
+                              hits: hits,
+                              bestCombo: best,
+                              played: played,
+                            ),
+                          ),
                         ),
                 ),
+                if (chat.isReady)
+                  _VoiceStatusBar(
+                    state: chat.voiceState,
+                    dinoSpeaking: chat.dinoSpeaking,
+                    thinking: chat.isThinking,
+                    heardText: chat.heardText,
+                    message: chat.voiceMessage,
+                    onTap: () => unawaited(notifier.toggleMicrophone()),
+                  ),
                 if (chat.suggestions.isNotEmpty)
                   SizedBox(
                     height: 44,
@@ -170,7 +290,14 @@ class _DinoChatScreenState extends ConsumerState<DinoChatScreen> {
                 _CareButtons(
                   enabled: canAct,
                   isSleeping: companion?.isSleeping ?? false,
-                  onCare: (care) => unawaited(notifier.care(care)),
+                  onCare: (care) => unawaited(
+                    care == DinoCare.feed && !(companion?.isSleeping ?? false)
+                        ? _openFoodPanel()
+                        // In the bedroom, "Dormir" again = go to bed.
+                        : care == DinoCare.sleep && chat.bedroom
+                        ? notifier.goToBed()
+                        : notifier.startActivity(care),
+                  ),
                   onWakeUp: () => unawaited(notifier.wakeUp()),
                 ),
                 Padding(
@@ -228,15 +355,11 @@ class _DinoChatScreenState extends ConsumerState<DinoChatScreen> {
                         ),
                         tooltip: 'Enviar',
                       ),
-                      if (chat.voiceAvailable)
+                      if (chat.isReady)
                         _MicButton(
-                          enabled:
-                              (canAct && !chat.isTranscribing) ||
-                              chat.isListening,
-                          isListening: chat.isListening,
-                          onStart: () => unawaited(notifier.startListening()),
-                          onStop: () => unawaited(notifier.stopListening()),
-                          onCancel: () => unawaited(notifier.cancelListening()),
+                          state: chat.voiceState,
+                          dinoSpeaking: chat.dinoSpeaking,
+                          onTap: () => unawaited(notifier.toggleMicrophone()),
                         ),
                     ],
                   ),
@@ -345,14 +468,34 @@ class _NeedMeter extends StatelessWidget {
   }
 }
 
-/// The Dino in the middle of the screen (3D, animated by the engine), a
-/// small emoji for what the model has no clip for, and the speech bubble.
-class _PetStage extends ConsumerWidget {
+/// The Dino in the middle of the screen (3D, animated by the engine, its
+/// mouth following the voice), a small emoji for what the model has no
+/// clip for, and the speech bubble.
+class _PetStage extends ConsumerStatefulWidget {
   const _PetStage({
     required this.animation,
     required this.rest,
     required this.response,
     required this.status,
+    required this.lookToken,
+    required this.chewToken,
+    required this.offered,
+    required this.offeredFood,
+    required this.foodHint,
+    required this.heartsToken,
+    required this.sleeping,
+    required this.xpBurst,
+    required this.xpAmount,
+    required this.onDeliver,
+    required this.onBallNoticed,
+    required this.onKick,
+    required this.bedroom,
+    required this.walkingToBed,
+    required this.ballGame,
+    required this.onGoToBed,
+    required this.onBallHit,
+    required this.onBallStopped,
+    required this.onStopBall,
   });
 
   final CompanionAnimation animation;
@@ -364,7 +507,125 @@ class _PetStage extends ConsumerWidget {
   /// "Ouvindo..." / "..." instead of the reply, or null.
   final String? status;
 
-  static const _clips = DinoClipMapper();
+  /// Changes when the Dino should turn to face the child.
+  final int lookToken;
+  final int chewToken;
+
+  /// Food or water waiting to be dragged to the Dino.
+  final DinoCare? offered;
+
+  /// The food from the panel, to drag to the mouth (with [offered] =
+  /// feed).
+  final FoodItem? offeredFood;
+  final bool foodHint;
+
+  /// Changes when the Dino loved a meal (❤️).
+  final int heartsToken;
+  final bool sleeping;
+
+  /// Changes when XP is earned ([xpAmount] floats up).
+  final int xpBurst;
+  final int xpAmount;
+  final VoidCallback onDeliver;
+  final ValueChanged<bool> onBallNoticed;
+  final VoidCallback onKick;
+
+  /// Bedtime: the room with the bed is shown.
+  final bool bedroom;
+  final bool walkingToBed;
+
+  /// The bouncing-ball game is on.
+  final bool ballGame;
+  final VoidCallback onGoToBed;
+  final ValueChanged<int> onBallHit;
+  final ValueChanged<int> onBallStopped;
+  final void Function(int hits, int bestCombo, Duration played) onStopBall;
+
+  @override
+  ConsumerState<_PetStage> createState() => _PetStageState();
+}
+
+class _PetStageState extends ConsumerState<_PetStage> {
+  static const _states = CompanionStateMachine();
+  static const _animations = CompanionAnimationController(_kDinoModel);
+  static const _interaction = CompanionInteractionController(
+    model: _kDinoModel,
+  );
+  final MouthAnimationController _mouth = MouthAnimationController();
+
+  /// One 3D view for the whole screen: it moves between the stage and the
+  /// ball game without reloading the model.
+  final GlobalKey _dinoKey = GlobalKey(debugLabel: 'dino-3d');
+
+  /// Food held over the mouth: it opens wide.
+  bool _gaping = false;
+
+  /// Each ball dropped on/thrown at the Dino: one more punch.
+  int _playSerial = 0;
+  ValueListenable<SpokenLine?>? _line;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final line = ref.read(companionVoiceServiceProvider).currentLine;
+    if (line != _line) {
+      _line?.removeListener(_onLine);
+      _line = line..addListener(_onLine);
+    }
+  }
+
+  /// Each line the voice starts (English, then Portuguese) moves the
+  /// mouth; between and after lines it closes.
+  void _onLine() {
+    final line = _line?.value;
+    if (line == null) {
+      _mouth.stop();
+    } else {
+      _mouth.talk(line.text);
+    }
+  }
+
+  @override
+  void dispose() {
+    _line?.removeListener(_onLine);
+    _mouth.dispose();
+    super.dispose();
+  }
+
+  void _kick() {
+    setState(() => _playSerial++);
+    widget.onKick();
+  }
+
+  /// The 3D Dino. [plan], [yaw]: what it does and the way it faces.
+  Widget _dino({
+    required CompanionClipPlan plan,
+    required double yaw,
+    required bool talking,
+    bool playing = false,
+  }) => DinoAnimatedModel(
+    key: _dinoKey,
+    model: _kDinoModel,
+    size: _kDinoSize,
+    plan: plan,
+    yaw: yaw,
+    playing: playing,
+    talking: talking,
+    mouth: _mouth.shape,
+    lookToken: widget.lookToken,
+    chewToken: widget.chewToken,
+    gaping: _gaping,
+  );
+
+  /// Clips for the engine's reaction while the Dino stays in its place.
+  CompanionClipPlan _restingPlan({required bool speaking}) {
+    final activity = _states.resolve(
+      engine: widget.animation,
+      speaking: speaking,
+    );
+    final rest = _states.resolve(engine: widget.rest, speaking: speaking);
+    return _animations.plan(activity, rest: rest, serial: _playSerial);
+  }
 
   /// Props for what the model's own clips can't show (eating, water...).
   static const Map<CompanionAnimation, String> _reaction = {
@@ -373,7 +634,6 @@ class _PetStage extends ConsumerWidget {
     CompanionAnimation.sleepy: '🥱',
     CompanionAnimation.eating: '😋',
     CompanionAnimation.drinking: '🥤',
-    CompanionAnimation.playing: '⚽',
     CompanionAnimation.sleeping: '💤',
     CompanionAnimation.celebrating: '🎉',
     CompanionAnimation.listening: '👂',
@@ -381,31 +641,188 @@ class _PetStage extends ConsumerWidget {
   };
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final animation = widget.animation;
     final reaction = _reaction[animation];
     final voice = ref.watch(companionVoiceServiceProvider);
+    final room = widget.bedroom || widget.sleeping;
+    // Walking to the bed, then sleeping on it (relative position: works
+    // on any screen size and for any Dino model).
+    final placement = _interaction.placement(
+      walkingToBed: widget.walkingToBed,
+      sleeping: widget.sleeping,
+      inBedroom: room,
+    );
+    final mouthZone = _interaction.mouthZone();
     return Column(
       children: [
         Expanded(
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // The mouth moves while the TTS is actually talking.
-              ValueListenableBuilder<Object?>(
-                valueListenable: voice.speaking,
-                builder: (context, utterance, _) => DinoAnimatedModel(
-                  modelAsset: _kDinoBabyAsset,
-                  height: 240,
-                  plan: _clips.plan(
-                    animation: animation,
-                    rest: rest,
-                    speaking: utterance != null,
+              if (room)
+                Positioned.fill(
+                  child: BedroomBackground(night: widget.sleeping),
+                ),
+              if (room)
+                Positioned(
+                  right: 4,
+                  bottom: 0,
+                  child: TappableBed(
+                    hint:
+                        widget.bedroom &&
+                        !widget.walkingToBed &&
+                        !widget.sleeping,
+                    onTap: widget.onGoToBed,
                   ),
                 ),
+              // The Dino is the drop target: food/water to eat, the ball to
+              // kick.
+              // (In the ball game the arena places it on the floor.)
+              if (!widget.ballGame)
+                Positioned.fill(
+                  child: AnimatedAlign(
+                    alignment: placement.alignment,
+                    duration: DinoChatController.walkToBedDuration,
+                    curve: Curves.easeInOut,
+                    child: AnimatedScale(
+                      scale: placement.scale,
+                      duration: DinoChatController.walkToBedDuration,
+                      child: DragTarget<_Toy>(
+                        onAcceptWithDetails: (details) {
+                          HapticFeedback.lightImpact();
+                          if (details.data == _Toy.ball) {
+                            _kick();
+                          } else {
+                            widget.onDeliver();
+                          }
+                        },
+                        builder: (context, candidates, _) => AnimatedScale(
+                          scale: candidates.isEmpty ? 1 : 1.06,
+                          duration: const Duration(milliseconds: 150),
+                          child: SizedBox.square(
+                            dimension: _kDinoSize,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                // Talking body (+ mouth, if the model has one)
+                                // while the voice is speaking.
+                                ValueListenableBuilder<Object?>(
+                                  valueListenable: voice.speaking,
+                                  builder: (context, utterance, _) => _dino(
+                                    plan: _restingPlan(
+                                      speaking: utterance != null,
+                                    ),
+                                    yaw: placement.yaw,
+                                    talking: utterance != null,
+                                  ),
+                                ),
+                                // The mouth's drop zone, from the model's mouth
+                                // point: it follows the Dino on any screen.
+                                Align(
+                                  alignment: mouthZone.alignment,
+                                  child: FractionallySizedBox(
+                                    widthFactor: mouthZone.widthFactor,
+                                    heightFactor: mouthZone.heightFactor,
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 220,
+                                      ),
+                                      child: MouthDropZone(
+                                        key: const ValueKey('mouth-drop-zone'),
+                                        enabled: !widget.sleeping,
+                                        onHover: (on) =>
+                                            setState(() => _gaping = on),
+                                        onDelivered: (_) => widget.onDeliver(),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              // Night: the room gets dark while the Dino sleeps.
+              IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: widget.sleeping ? 0.3 : 0,
+                  duration: const Duration(milliseconds: 800),
+                  child: Container(color: Colors.black),
+                ),
               ),
+              // The ball is a real toy: tap = the Dino looks, drag = it
+              // watches, release/throw = it runs and kicks.
+              if (!widget.ballGame && !room)
+                Positioned(
+                  right: 24,
+                  top: 8,
+                  child: _DraggableToy(
+                    toy: _Toy.ball,
+                    enabled: !widget.sleeping,
+                    onTap: () => widget.onBallNoticed(false),
+                    onDragStarted: () => widget.onBallNoticed(true),
+                    onThrown: _kick,
+                  ),
+                ),
+              if (widget.ballGame)
+                Positioned.fill(
+                  child: ValueListenableBuilder<Object?>(
+                    valueListenable: voice.speaking,
+                    builder: (context, utterance, _) => BallArena(
+                      key: const ValueKey('ball-arena'),
+                      model: _kDinoModel,
+                      dinoSize: _kDinoSize,
+                      // Chasing, punching -- and talking while it plays.
+                      dinoBuilder: (context, game) => _dino(
+                        plan: _animations.plan(
+                          game.activity(
+                            engine: animation,
+                            speaking: utterance != null,
+                          ),
+                          // Rounded: the view only hears real changes.
+                          timeScale: (game.timeScale * 20).round() / 20,
+                          serial: game.attackSerial,
+                        ),
+                        yaw: game.dino.yawDegrees,
+                        talking: utterance != null,
+                        playing: true,
+                      ),
+                      onHit: widget.onBallHit,
+                      onStopped: widget.onBallStopped,
+                      onFinish: widget.onStopBall,
+                    ),
+                  ),
+                ),
+              if (widget.offeredFood case final food?
+                  when widget.offered == DinoCare.feed)
+                Positioned(
+                  bottom: 8,
+                  child: DraggableFood(
+                    key: ValueKey('offered-${food.id}'),
+                    food: food,
+                    showHint: widget.foodHint,
+                  ),
+                )
+              else if (widget.offered case final care?)
+                Positioned(
+                  bottom: 12,
+                  child: _DraggableToy(
+                    toy: care == DinoCare.water ? _Toy.water : _Toy.food,
+                    enabled: true,
+                    hint: true,
+                    // Little hands may just tap it.
+                    onTap: widget.onDeliver,
+                  ),
+                ),
+              HeartsBurst(token: widget.heartsToken),
+              _XpBurst(token: widget.xpBurst, amount: widget.xpAmount),
               if (reaction != null)
                 Positioned(
-                  right: 40,
+                  left: 24,
                   top: 8,
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 250),
@@ -421,7 +838,7 @@ class _PetStage extends ConsumerWidget {
             ],
           ),
         ),
-        _SpeechBubble(response: response, status: status),
+        _SpeechBubble(response: widget.response, status: widget.status),
       ],
     );
   }
@@ -436,6 +853,24 @@ class _SpeechBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lines = response?.lines ?? const <CompanionLine>[];
+    // Each new reply pops in (scale + fade) so the child sees it change.
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 260),
+      transitionBuilder: (child, anim) => FadeTransition(
+        opacity: anim,
+        child: ScaleTransition(
+          scale: Tween(begin: 0.92, end: 1.0).animate(anim),
+          child: child,
+        ),
+      ),
+      child: KeyedSubtree(
+        key: ValueKey(status ?? identityHashCode(response)),
+        child: _bubble(lines),
+      ),
+    );
+  }
+
+  Widget _bubble(List<CompanionLine> lines) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -669,48 +1104,347 @@ class _Bubble extends StatelessWidget {
   }
 }
 
-/// Push-to-talk: hold to speak, release to send, slide off to cancel.
-class _MicButton extends StatelessWidget {
-  const _MicButton({
-    required this.enabled,
-    required this.isListening,
-    required this.onStart,
-    required this.onStop,
-    required this.onCancel,
+/// 🎙️ Ouvindo... / 🎙️ "texto" / 🧠 Processando... / a friendly error.
+/// Tapping it does what the mic button does.
+class _VoiceStatusBar extends StatelessWidget {
+  const _VoiceStatusBar({
+    required this.state,
+    required this.dinoSpeaking,
+    required this.thinking,
+    required this.heardText,
+    required this.message,
+    required this.onTap,
   });
 
-  final bool enabled;
-  final bool isListening;
-  final VoidCallback onStart;
-  final VoidCallback onStop;
-  final VoidCallback onCancel;
+  final VoiceState state;
+  final bool dinoSpeaking;
+  final bool thinking;
+  final String? heardText;
+  final String? message;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = isListening ? NeonColors.red : NeonColors.green;
-    return Tooltip(
-      message: 'Segure para falar',
-      child: Listener(
-        onPointerDown: enabled ? (_) => onStart() : null,
-        onPointerUp: enabled ? (_) => onStop() : null,
-        onPointerCancel: enabled ? (_) => onCancel() : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          width: isListening ? 56 : 48,
-          height: isListening ? 56 : 48,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color.withValues(alpha: enabled ? 0.22 : 0.06),
-            border: Border.all(
-              color: color.withValues(alpha: enabled ? 0.9 : 0.3),
-              width: 2,
+    final blocked = state == VoiceState.error || state == VoiceState.disabled;
+    final (text, color) = switch (state) {
+      // The mic is closed while the Dino thinks/talks: say so.
+      _ when dinoSpeaking && !blocked => ('🦖 Falando...', NeonColors.purple),
+      _ when thinking && !blocked => ('🧠 Pensando...', NeonColors.cyan),
+      VoiceState.listening when heardText != null => (
+        '🎙️ "$heardText"',
+        NeonColors.green,
+      ),
+      VoiceState.listening => ('🎙️ Ouvindo...', NeonColors.green),
+      VoiceState.processing => (
+        '🧠 ${message ?? 'Processando...'}',
+        NeonColors.cyan,
+      ),
+      VoiceState.idle => (
+        '🎙️ Microfone pausado — toque para ouvir',
+        NeonColors.textSecondary,
+      ),
+      VoiceState.error || VoiceState.disabled => (
+        message ?? 'Conversa por voz indisponível.',
+        NeonColors.orange,
+      ),
+    };
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.5)),
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: Text(
+            text,
+            key: ValueKey(text),
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: state == VoiceState.idle
+                  ? NeonColors.textSecondary
+                  : NeonColors.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          child: Icon(
-            isListening ? Icons.graphic_eq_rounded : Icons.mic_rounded,
-            color: enabled ? color : NeonColors.textSecondary,
-          ),
         ),
+      ),
+    );
+  }
+}
+
+/// Hands-free mic toggle: green and pulsing while the Dino listens; tap
+/// to pause/resume, or to allow the microphone when it's disabled.
+class _MicButton extends StatefulWidget {
+  const _MicButton({
+    required this.state,
+    required this.dinoSpeaking,
+    required this.onTap,
+  });
+
+  final VoiceState state;
+
+  /// While the Dino talks the mic is closed: shows a speaker instead.
+  final bool dinoSpeaking;
+  final VoidCallback onTap;
+
+  @override
+  State<_MicButton> createState() => _MicButtonState();
+}
+
+class _MicButtonState extends State<_MicButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _syncPulse();
+  }
+
+  @override
+  void didUpdateWidget(_MicButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncPulse();
+  }
+
+  void _syncPulse() {
+    if (widget.state == VoiceState.listening) {
+      if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
+    } else {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, color, tooltip) = switch (widget.state) {
+      VoiceState.idle || VoiceState.listening when widget.dinoSpeaking => (
+        Icons.volume_up_rounded,
+        NeonColors.purple,
+        'O Dino está falando',
+      ),
+      VoiceState.listening => (
+        Icons.mic_rounded,
+        NeonColors.green,
+        'Ouvindo — toque para pausar',
+      ),
+      VoiceState.processing => (
+        Icons.graphic_eq_rounded,
+        NeonColors.cyan,
+        'Processando',
+      ),
+      VoiceState.idle => (
+        Icons.mic_off_rounded,
+        NeonColors.textSecondary,
+        'Microfone pausado — toque para ouvir',
+      ),
+      VoiceState.error || VoiceState.disabled => (
+        Icons.mic_off_rounded,
+        NeonColors.orange,
+        'Permitir microfone',
+      ),
+    };
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedBuilder(
+          animation: _pulse,
+          builder: (context, child) => Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withValues(alpha: 0.18),
+              border: Border.all(color: color, width: 2),
+              boxShadow: [
+                if (widget.state == VoiceState.listening)
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.5 * _pulse.value),
+                    blurRadius: 6 + 12 * _pulse.value,
+                    spreadRadius: 2 * _pulse.value,
+                  ),
+              ],
+            ),
+            child: child,
+          ),
+          child: Icon(icon, color: color),
+        ),
+      ),
+    );
+  }
+}
+
+enum _Toy {
+  ball('⚽'),
+  food('🍎'),
+  water('🥤');
+
+  const _Toy(this.emoji);
+  final String emoji;
+}
+
+/// Something the child drags to the Dino. Bounces gently to invite a
+/// touch ([hint]); dropping it on the Dino is handled by its DragTarget.
+class _DraggableToy extends StatefulWidget {
+  const _DraggableToy({
+    required this.toy,
+    required this.enabled,
+    this.hint = false,
+    this.onTap,
+    this.onDragStarted,
+    this.onThrown,
+  });
+
+  final _Toy toy;
+  final bool enabled;
+  final bool hint;
+  final VoidCallback? onTap;
+  final VoidCallback? onDragStarted;
+
+  /// Released anywhere but on the Dino (a throw).
+  final VoidCallback? onThrown;
+
+  @override
+  State<_DraggableToy> createState() => _DraggableToyState();
+}
+
+class _DraggableToyState extends State<_DraggableToy>
+    with SingleTickerProviderStateMixin {
+  Offset? _down;
+  late final AnimationController _bounce = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _bounce.dispose();
+    super.dispose();
+  }
+
+  Widget _emoji(double size) => Text(
+    widget.toy.emoji,
+    style: TextStyle(
+      fontSize: size,
+      shadows: const [Shadow(color: Colors.black54, blurRadius: 8)],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final child = AnimatedBuilder(
+      animation: _bounce,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(0, widget.hint ? -8 * _bounce.value : 0),
+        child: child,
+      ),
+      child: _emoji(widget.hint ? 56 : 40),
+    );
+    if (!widget.enabled) return Opacity(opacity: 0.4, child: _emoji(40));
+    return Draggable<_Toy>(
+      data: widget.toy,
+      feedback: Material(color: Colors.transparent, child: _emoji(64)),
+      childWhenDragging: Opacity(opacity: 0.25, child: _emoji(40)),
+      onDragStarted: widget.onDragStarted,
+      onDragEnd: (details) {
+        if (!details.wasAccepted) widget.onThrown?.call();
+      },
+      // Draggable wins the gesture arena on touch, so a GestureDetector
+      // would never see a tap: a Listener sees every pointer, and a short
+      // touch that barely moved counts as a tap.
+      child: Listener(
+        onPointerDown: (e) => _down = e.position,
+        onPointerUp: (e) {
+          final down = _down;
+          _down = null;
+          if (down != null && (e.position - down).distance < 12) {
+            widget.onTap?.call();
+          }
+        },
+        child: child,
+      ),
+    );
+  }
+}
+
+/// "+10 XP" floating up and fading each time XP is earned.
+class _XpBurst extends StatefulWidget {
+  const _XpBurst({required this.token, required this.amount});
+
+  final int token;
+  final int amount;
+
+  @override
+  State<_XpBurst> createState() => _XpBurstState();
+}
+
+class _XpBurstState extends State<_XpBurst>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  );
+
+  @override
+  void didUpdateWidget(_XpBurst oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.token != oldWidget.token && widget.amount > 0) {
+      _anim.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _anim,
+        builder: (context, _) {
+          if (!_anim.isAnimating) return const SizedBox.shrink();
+          final t = Curves.easeOut.transform(_anim.value);
+          return Transform.translate(
+            offset: Offset(0, -40 - 80 * t),
+            child: Opacity(
+              opacity: (1 - t).clamp(0.0, 1.0),
+              child: Transform.scale(
+                scale: 1 + 0.4 * (1 - t),
+                child: Text(
+                  '+${widget.amount} XP ⭐',
+                  style: const TextStyle(
+                    color: NeonColors.orange,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    shadows: [Shadow(color: Colors.black, blurRadius: 6)],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

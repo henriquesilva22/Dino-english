@@ -47,3 +47,6 @@ app.*.map.json
 # Offline voice model (~104 MB): fetched by tool/download_voice_model.sh
 /assets/models/voice/*
 !/assets/models/voice/.gitkeep
+/assets/models/voice_pt/faber/*
+/assets/models/voice_pt/razo/*
+!/assets/models/voice_pt/*/.gitkeep

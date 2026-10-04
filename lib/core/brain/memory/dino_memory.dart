@@ -221,3 +221,19 @@ class DinoMemoryBank {
   Future<void> rememberFact(String key, String value) =>
       _upsert(DinoMemoryKind.fact, key, value);
 }
+
+/// Facts ([DinoMemoryKind.fact]) the companion keeps. Favorites
+/// (food, colors, animals) are [DinoMemoryKind.preference]s.
+abstract final class MemoryKeys {
+  static const String childName = 'child_name';
+  static const String childAge = 'child_age';
+
+  /// Last care activity (`feed`, `water`, `play`, `sleep`).
+  static const String lastActivity = 'last_activity';
+
+  /// Last official word the child repeated/answered correctly.
+  static const String lastWordLearned = 'last_word_learned';
+
+  /// ISO time of the last sentence the child said.
+  static const String lastInteraction = 'last_interaction';
+}

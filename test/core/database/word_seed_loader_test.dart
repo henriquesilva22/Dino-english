@@ -25,7 +25,7 @@ void main() {
     await loader.seedIfNeeded();
 
     final words = await database.select(database.words).get();
-    expect(words, hasLength(240));
+    expect(words, hasLength(267));
 
     final versionRow = await (database.select(
       database.seedMetadata,
@@ -38,7 +38,7 @@ void main() {
     await loader.seedIfNeeded();
 
     final words = await database.select(database.words).get();
-    expect(words, hasLength(240));
+    expect(words, hasLength(267));
   });
 
   test('re-seeding never touches an existing word_progress row', () async {
@@ -62,7 +62,7 @@ void main() {
     expect(progress.masteryLevel, 4);
   });
 
-  test('every english term is unique across the 240 words', () async {
+  test('every english term is unique across the 267 words', () async {
     await loader.seedIfNeeded();
 
     final words = await database.select(database.words).get();

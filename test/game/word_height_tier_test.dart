@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:dino_english/game/level/lane_movement_controller.dart';
 import 'package:dino_english/game/word_height_tier.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -34,14 +35,9 @@ void main() {
     }
   });
 
-  test('groundOffset increases from low to high', () {
-    expect(
-      WordHeightTier.low.groundOffset,
-      lessThan(WordHeightTier.medium.groundOffset),
-    );
-    expect(
-      WordHeightTier.medium.groundOffset,
-      lessThan(WordHeightTier.high.groundOffset),
-    );
+  test('each tier floats in its own lane', () {
+    expect(WordHeightTier.low.lane, AdventureLane.ground);
+    expect(WordHeightTier.medium.lane, AdventureLane.mid);
+    expect(WordHeightTier.high.lane, AdventureLane.high);
   });
 }

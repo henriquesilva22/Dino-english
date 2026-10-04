@@ -1,22 +1,18 @@
 import 'dart:math';
 
-/// How high a word floats above the ground. Independent of whether the
-/// word is correct or incorrect -- the player has to actually read it,
-/// not infer the answer from its height.
+import 'level/lane_movement_controller.dart';
+
+/// Which lane a word floats in. Independent of whether the word is correct
+/// or incorrect -- the player has to actually read it, not infer the
+/// answer from its height.
 enum WordHeightTier { low, medium, high }
 
-extension WordHeightTierGroundOffset on WordHeightTier {
-  /// Vertical offset (world units) between the ground line and the
-  /// bottom of the word capsule. Matches `AdventureLevelLayout`'s platform
-  /// heights exactly: `low` sits on the ground, `medium` on the `mid`
-  /// platform (85px up), `high` on the `high` platform (165px up) --
-  /// reachable within the jump apex of [DifficultyConfig.standard]
-  /// (~196px, from jumpVelocity²/(2·gravity)). Revisit both together if
-  /// either changes.
-  double get groundOffset => switch (this) {
-    WordHeightTier.low => 0,
-    WordHeightTier.medium => 85,
-    WordHeightTier.high => 165,
+extension WordHeightTierLane on WordHeightTier {
+  /// The lane the pet must be on to catch it.
+  AdventureLane get lane => switch (this) {
+    WordHeightTier.low => AdventureLane.ground,
+    WordHeightTier.medium => AdventureLane.mid,
+    WordHeightTier.high => AdventureLane.high,
   };
 }
 

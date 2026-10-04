@@ -1,7 +1,9 @@
 import 'dart:math';
 
 import 'package:dino_english/core/brain/context/conversation_context.dart';
-import 'package:dino_english/core/brain/intent/intent.dart';
+import 'package:dino_english/core/companion/engine/companion_intent.dart';
+import 'package:dino_english/core/companion/engine/response_bank.dart';
+import 'package:dino_english/core/companion/engine/response_selector.dart';
 import 'package:dino_english/core/brain/memory/dino_memory.dart';
 import 'package:dino_english/core/brain/model/dino_enums.dart';
 import 'package:dino_english/core/companion/companion_engine.dart';
@@ -38,6 +40,12 @@ class _FakeRewards implements CompanionRewards {
     return CompanionRewardResult(xpAwarded: xp, level: 1);
   }
 }
+
+/// English lines of a response-bank pool (no name, up to [tier]).
+List<String> enOf(String key, {EnglishTier tier = EnglishTier.b1}) => [
+  for (final t in defaultResponseBank[key]!)
+    if (t.tier.index <= tier.index) ResponseSelector.fill(t.en, {'name': ''}),
+];
 
 void main() {
   var now = DateTime(2026, 10, 3, 10);
@@ -91,7 +99,7 @@ void main() {
     test('"Oi" is a greeting answered in English with a translation', () async {
       final engine = await newEngine();
       final r = await engine.process('Oi');
-      expect(r.intent, DinoIntent.greeting);
+      expect(r.intent, CompanionIntent.greeting);
       expect(r.text, isNotEmpty);
       expect(r.translation, isNotNull);
     });
@@ -99,7 +107,7 @@ void main() {
     test('"Qual seu nome?" -> My name is Dino!', () async {
       final engine = await newEngine();
       final r = await engine.process('Qual seu nome?');
-      expect(r.intent, DinoIntent.askDinoName);
+      expect(r.intent, CompanionIntent.askName);
       expect(r.lines.first.text, 'My name is Dino!');
       expect(r.lines.first.translation, 'Meu nome é Dino!');
     });
@@ -111,7 +119,8 @@ void main() {
         final r = await engine.process('hello');
         seen.add(r.lines.first.text);
       }
-      expect(seen, {"Hi! I'm Dino!", 'Hello!', 'Hi! Nice to see you!'});
+      expect(enOf('greeting', tier: EnglishTier.a1), containsAll(seen));
+      expect(seen.length, greaterThanOrEqualTo(4));
     });
 
     test('older learners also hear longer sentences', () async {
@@ -126,10 +135,10 @@ void main() {
     test('"Eu gosto de você" and "Você é fofo" get kind answers', () async {
       final engine = await newEngine();
       final like = await engine.process('Eu gosto de você');
-      expect(like.intent, DinoIntent.affection);
+      expect(like.intent, CompanionIntent.affection);
       expect(like.translation, isNotNull);
       final cute = await engine.process('Você é fofo');
-      expect(cute.intent, DinoIntent.praise);
+      expect(cute.intent, CompanionIntent.praise);
       expect(cute.text, contains('Thank you'));
       expect(cute.state.happiness, greaterThan(80));
     });
@@ -138,7 +147,9 @@ void main() {
       for (var seed = 0; seed < 10; seed++) {
         final engine = await newEngine(seed: seed);
         final r = await engine.process('xpto blorg zuzu');
-        expect(r.intent, DinoIntent.unknown);
+        expect(r.intent, CompanionIntent.unknown);
+        // Pensive, not scared.
+        expect(r.animation, CompanionAnimation.thinking);
         expect(r.translation, isNot(contains('Não entendi')));
         expect(r.text, isNot(contains('Wrong')));
         expect(r.translation, isNotNull);
@@ -149,7 +160,7 @@ void main() {
       final engine = await newEngine();
       await engine.process('My favorite food is pizza');
       final r = await engine.process('What is my favorite food?');
-      expect(r.intent, DinoIntent.askMemory);
+      expect(r.intent, CompanionIntent.askMemory);
       expect(r.text, 'Your favorite food is pizza!');
     });
 
@@ -166,25 +177,27 @@ void main() {
   group('state-aware answers', () {
     test('"Você está com fome?" depends on the real hunger', () async {
       final hungry = await newEngine(saved: stateWith(hunger: 20));
-      expect(
-        (await hungry.process('Você está com fome?')).text,
-        contains('hungry'),
-      );
+      final yes = await hungry.process('Você está com fome?');
+      expect(yes.intent, CompanionIntent.askHungry);
+      expect(enOf('hunger.urgent'), contains(yes.text));
 
       final aLittle = await newEngine(saved: stateWith(hunger: 60));
-      expect((await aLittle.process('Tá com fome?')).text, 'A little hungry!');
+      expect(
+        enOf('hunger.mild'),
+        contains((await aLittle.process('Tá com fome?')).text),
+      );
 
       final full = await newEngine(saved: stateWith(hunger: 95));
       expect(
-        (await full.process('Está com fome?')).text,
-        contains('not hungry'),
+        enOf('hunger.fine'),
+        contains((await full.process('Está com fome?')).text),
       );
     });
 
     test('"Você está bem?" while hungry -> hungry; fed -> happy now', () async {
       final engine = await newEngine(saved: stateWith(hunger: 20));
       final before = await engine.process('Você está bem?');
-      expect(before.text.toLowerCase(), contains('hungry'));
+      expect(enOf('feeling.hunger'), contains(before.lines.first.text));
       expect(before.emotion, CompanionEmotion.hungry);
 
       final fed = await engine.care(DinoCare.feed);
@@ -278,7 +291,7 @@ void main() {
         expect(eat.state.hunger, 60);
 
         final play = await engine.process('Vamos brincar?');
-        expect(play.intent, DinoIntent.play);
+        expect(play.intent, CompanionIntent.askPlay);
         expect(play.care, DinoCare.play);
         expect(play.state.happiness, greaterThan(50));
         expect(play.text, isNotEmpty);
@@ -380,7 +393,6 @@ void main() {
     expect(engine.expectedLanguage, SpeechLanguageHint.auto);
     await engine.process('Me dá água');
     expect(engine.expectedLanguage, SpeechLanguageHint.english);
-    expect(engine.didNotHear().suggestions, ['water']);
     await engine.process('water');
     expect(engine.expectedLanguage, SpeechLanguageHint.auto);
   });

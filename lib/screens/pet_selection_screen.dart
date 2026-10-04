@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/companion/model/companion_model.dart';
 import '../core/single_navigation_guard.dart';
 import '../game/pets/pet_catalog.dart';
 import '../game/sound/adventure_sfx.dart';
@@ -45,6 +46,10 @@ class PetSelectionScreen extends ConsumerWidget {
                 modelAsset: selectedPet.modelAsset,
                 label: selectedPet.displayName,
                 height: 200,
+                // The Dino shows its idle (the animals have no clips).
+                animationName: selectedPet.companionModel
+                    ?.clip(CompanionAnim.idle)
+                    ?.name,
               ),
               Text(
                 selectedPet.displayName,
@@ -66,9 +71,9 @@ class PetSelectionScreen extends ConsumerWidget {
                     mainAxisSpacing: 10,
                     childAspectRatio: 0.82,
                   ),
-                  itemCount: kPetCatalog.length,
+                  itemCount: kPlayablePets.length,
                   itemBuilder: (context, index) {
-                    final pet = kPetCatalog[index];
+                    final pet = kPlayablePets[index];
                     return PetCatalogTile(
                       pet: pet,
                       selected: pet.id == selectedId,

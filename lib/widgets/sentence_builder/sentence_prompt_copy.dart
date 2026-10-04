@@ -2,7 +2,7 @@
 /// [SentenceExerciseStyle.situationHint]/[SentenceExerciseStyle.emojiHint].
 /// Covers the 15 real categories in the seed data (`animals, colors,
 /// family, food, greetings, numbers, objects, verbs, feelings, nature,
-/// people, places, adjectives, body, clothes`); a fallback covers any
+/// people, places, adjectives, body, clothes, time`); a fallback covers any
 /// category added later without this file needing an update.
 const Map<String, String> _situationByCategory = {
   'animals': 'Você está falando sobre animais.',
@@ -20,6 +20,7 @@ const Map<String, String> _situationByCategory = {
   'adjectives': 'Você está descrevendo alguma coisa.',
   'body': 'Você está falando sobre o corpo.',
   'clothes': 'Você está falando sobre roupas.',
+  'time': 'Você está falando sobre o tempo.',
 };
 
 const Map<String, String> _emojiByCategory = {
@@ -38,6 +39,7 @@ const Map<String, String> _emojiByCategory = {
   'adjectives': '✨',
   'body': '✋',
   'clothes': '👕',
+  'time': '🕐',
 };
 
 String situationFor(String category) =>

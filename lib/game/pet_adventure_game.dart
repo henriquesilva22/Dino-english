@@ -2,7 +2,6 @@ import 'dart:async' show unawaited;
 import 'dart:math';
 
 import 'package:flame/components.dart';
-import 'package:flame/events.dart';
 import 'package:flame/flame.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
@@ -10,17 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../core/database/app_database.dart';
-import 'background/cloud_layer_component.dart';
-import 'background/mountain_layer_component.dart';
-import 'background/sky_component.dart';
-import 'background/tree_layer_component.dart';
+import 'background/scenery_background_component.dart';
 import 'boss_component.dart';
 import 'boss_fight_state.dart';
 import 'boss_projectile_component.dart';
 import 'difficulty_config.dart';
 import 'effects/collect_burst_component.dart';
 import 'effects/floating_text_component.dart';
-import 'ground_component.dart';
 import 'level/adventure_level_layout.dart';
 import 'level/platform_component.dart';
 import 'minigame_round_state.dart';
@@ -50,8 +45,7 @@ enum GameSessionPhase { starting, running, ending, disposed }
 /// Riverpod knowledge -- it only reports collected words through the two
 /// constructor callbacks, so the screen/provider layer decides what to do
 /// with them (see `lib/providers/minigame_providers.dart`).
-class PetAdventureGame extends FlameGame
-    with HasCollisionDetection, TapCallbacks {
+class PetAdventureGame extends FlameGame with HasCollisionDetection {
   PetAdventureGame({
     required this.pet,
     required this.correctWordPool,
@@ -126,6 +120,10 @@ class PetAdventureGame extends FlameGame
       : DifficultyConfig.bossBand(bossState!.band);
 
   late final PetComponent dino;
+
+  /// Where the pet is, every frame (the 3D Dino is drawn there, over the
+  /// game). Null until the pet is placed.
+  final ValueNotifier<PetPose?> petPose = ValueNotifier(null);
   late final PetDefinition _bossPet;
 
   /// Minimum time between shots, so the shoot button can't be spammed
@@ -162,18 +160,15 @@ class PetAdventureGame extends FlameGame
       _bossPet = pickBossPet(pet);
     }
 
-    // Preload every sprite the background/ground/pet layers need up
+    // Preload every sprite the scenery/platform/pet layers need up
     // front -- GameWidget only renders after onLoad() resolves, so every
     // child component below can read Flame.images.fromCache(...)
     // synchronously.
     await Flame.images.loadAll([
-      kCloudsBackgroundAsset,
-      kHillsBackgroundAsset,
-      ...kForegroundDecorationAssets,
-      kGroundTileAsset,
+      kSceneryAsset,
       ...kPlatformAssets,
-      pet.previewAsset,
-      if (isBossFight) _bossPet.previewAsset,
+      ?pet.previewAsset, // null for the 3D Dino
+      if (isBossFight) ?_bossPet.previewAsset,
     ]);
     // The route can be popped while any of the awaits above are still in
     // flight -- that doesn't cancel this coroutine (plain Dart futures
@@ -186,20 +181,16 @@ class PetAdventureGame extends FlameGame
     sound.playMusic();
 
     dino = PetComponent(difficulty: difficulty, pet: pet);
-    final ground = GroundComponent()
-      ..priority = -10
-      ..scrollSpeed = difficulty.scrollSpeed;
+    // The ground lane is the path painted in the scenery; the two lanes
+    // above it are separate platforms.
     final elevatedPlatforms = levelLayout.platforms
         .where((p) => p.id != 'ground')
         .map((p) => PlatformComponent(spec: p)..priority = -5);
 
     if (_phase == GameSessionPhase.disposed) return;
     world.addAll([
-      SkyComponent()..priority = -100,
-      CloudLayerComponent()..priority = -90,
-      MountainLayerComponent()..priority = -80,
-      TreeLayerComponent()..priority = -20,
-      ground,
+      SceneryBackgroundComponent(scrollSpeed: difficulty.scrollSpeed)
+        ..priority = -100,
       ...elevatedPlatforms,
       dino,
       WordSpawner(random: _random),
@@ -250,26 +241,26 @@ class PetAdventureGame extends FlameGame
     super.onRemove();
   }
 
-  @override
-  void onTapDown(TapDownEvent event) {
-    super.onTapDown(event);
+  /// ⬆️ (button or ArrowUp): the pet hops up one lane. The only
+  /// ways the pet moves -- touching the game itself does nothing.
+  void moveUp() {
     if (_phase != GameSessionPhase.running) return;
-    dino.jump();
+    dino.moveUp();
   }
 
-  /// Quickly falls through the elevated platform the pet is currently
-  /// standing on -- called from the HUD's descend button.
-  void dropThrough() {
+  /// ⬇️ (button or ArrowDown): the pet hops down one lane.
+  void moveDown() {
     if (_phase != GameSessionPhase.running) return;
-    dino.dropThrough();
+    dino.moveDown();
   }
 
   /// Fires a straight shot from wherever the pet currently is (works
   /// mid-jump too). Rate-limited by [_shootCooldownDuration]; called from
   /// the shoot button in `PetAdventureGameScreen`.
-  void shoot() {
-    if (_phase != GameSessionPhase.running) return;
-    if (_shootCooldownRemaining > 0) return;
+  /// Returns whether a shot was fired (the 3D Dino punches with it).
+  bool shoot() {
+    if (_phase != GameSessionPhase.running) return false;
+    if (_shootCooldownRemaining > 0) return false;
     _shootCooldownRemaining = _shootCooldownDuration;
     sound.play(AdventureSfx.shoot);
     world.add(
@@ -281,6 +272,7 @@ class PetAdventureGame extends FlameGame
         speed: _projectileSpeed,
       ),
     );
+    return true;
   }
 
   /// Called by [ProjectileComponent.onCollisionStart]. Only fires for

@@ -10,12 +10,16 @@ class PetModelViewer extends StatelessWidget {
     required this.modelAsset,
     required this.label,
     this.height = 220,
+    this.animationName,
     super.key,
   });
 
   final String modelAsset;
   final String label;
   final double height;
+
+  /// A clip to loop (e.g. the companion's idle), or null for none.
+  final String? animationName;
 
   static bool get _isSupportedPlatform {
     if (kIsWeb) return true;
@@ -36,6 +40,8 @@ class PetModelViewer extends StatelessWidget {
         alt: label,
         backgroundColor: Colors.transparent,
         autoRotate: true,
+        animationName: animationName,
+        autoPlay: animationName != null ? true : null,
         cameraControls: true,
         disableZoom: false,
       ),

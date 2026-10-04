@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../database/app_database.dart';
+import '../economy/coin_rewards.dart';
 import '../models/dino_evolution_stage.dart';
 import '../models/session_kind.dart';
 import '../services/hatching_service.dart';
@@ -23,6 +24,7 @@ class AnswerResult {
     required this.newLevel,
     required this.newDinoStage,
     required this.hatchedJustNow,
+    this.coinsAwarded = 0,
   });
 
   final int xpAwarded;
@@ -31,6 +33,9 @@ class AnswerResult {
   final int newLevel;
   final DinoEvolutionStage newDinoStage;
   final bool hatchedJustNow;
+
+  /// 🪙 coins earned by this answer (see [CoinRewards]).
+  final int coinsAwarded;
 
   bool get leveledUp => newLevel > previousLevel;
 }
@@ -174,6 +179,12 @@ class ProgressRepository {
       final countsAsActiveDay = _streak.countsAsActiveDay(
         newExercisesCompleted,
       );
+      final coinsAwarded = CoinRewards.forAnswer(
+        wasCorrect: wasCorrect,
+        countsAsExercise: countsAsExercise,
+        completedActiveDay:
+            countsAsActiveDay && !(todayRow?.countsAsActiveDay ?? false),
+      );
       await _database
           .into(_database.dailyActivityLog)
           .insertOnConflictUpdate(
@@ -210,6 +221,7 @@ class ProgressRepository {
               currentStreakDays: Value(newCurrentStreak),
               longestStreakDays: Value(newLongestStreak),
               lastStudyDate: Value(todayKey),
+              coins: Value(profile.coins + coinsAwarded),
               createdAt: profile.createdAt,
             ),
           );
@@ -271,6 +283,7 @@ class ProgressRepository {
         newLevel: grant.newLevel,
         newDinoStage: newStage,
         hatchedJustNow: hatchedJustNow,
+        coinsAwarded: coinsAwarded,
       );
     });
   }

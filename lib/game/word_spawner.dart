@@ -9,9 +9,9 @@ import 'word_component.dart';
 import 'word_height_tier.dart';
 
 /// Periodically spawns words off the right edge of the screen, correct
-/// and incorrect alike, each floating at an independently-picked height
-/// tier -- the player has to read every capsule and decide whether to
-/// jump into it or duck under it, rather than inferring the answer from
+/// and incorrect alike, each in an independently-picked lane -- the
+/// player has to read every capsule and decide whether to move to its
+/// lane or out of it, rather than inferring the answer from
 /// its position. Timing and mix are driven entirely by [DifficultyConfig],
 /// so a harder preset later only needs new numbers, not new spawner logic.
 class WordSpawner extends Component with HasGameReference<PetAdventureGame> {
@@ -52,11 +52,11 @@ class WordSpawner extends Component with HasGameReference<PetAdventureGame> {
     // actively running.
     if (game.phase != GameSessionPhase.running) return;
     final difficulty = game.activeDifficulty;
-    final groundY = game.levelLayout.ground.top;
     final spawnX = game.size.x + 40;
     final isCorrect = random.nextDouble() < difficulty.correctWordProbability;
     final tier = pickWordHeightTier(random, difficulty.heightTierWeights);
-    final spawnY = groundY - tier.groundOffset;
+    // On the lane's surface: the pet catches it by being on that lane.
+    final spawnY = game.levelLayout.laneSurface(tier.lane).top;
 
     if (isCorrect && game.correctWordPool.isNotEmpty) {
       game.world.add(

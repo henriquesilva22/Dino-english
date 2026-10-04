@@ -319,14 +319,22 @@ class ResponseGenerator {
   DinoLine meaning(VocabularyEntry word) {
     final translations = word.translations;
     final main = '${_cap(word.english)} means ${translations.first}.';
-    if (translations.length == 1) return DinoLine(main);
+    if (translations.length == 1) {
+      return DinoLine(
+        main,
+        '${_cap(word.english)} significa ${translations.first}.',
+      );
+    }
     final others = _joinOr(translations.skip(1).toList());
     return DinoLine('$main It can also mean $others.', _sensesHint(word));
   }
 
   /// "Cachorro is dog in English."
   DinoLine translation(VocabularyEntry word, String portugueseAsked) =>
-      DinoLine('${_cap(portugueseAsked)} is ${word.english} in English.');
+      DinoLine(
+        '${_cap(portugueseAsked)} is ${word.english} in English.',
+        '${_cap(word.english)} significa $portugueseAsked.',
+      );
 
   DinoLine example(VocabularyEntry word, {int senseIndex = 0}) {
     final sense = word.senses[senseIndex.clamp(0, word.senses.length - 1)];
@@ -733,9 +741,22 @@ class ResponseGenerator {
     'Hmm... Ainda não sei! Você pode me contar?',
   );
 
+  /// "Sua cor favorita" / "Seu animal favorito": Portuguese agrees with
+  /// the topic's gender.
+  static const Map<String, String> _yourFavoritePt = {
+    'food': 'Sua comida favorita',
+    'animals': 'Seu animal favorito',
+    'colors': 'Sua cor favorita',
+    'nature': 'Sua coisa favorita da natureza',
+    'verbs': 'Sua coisa favorita de fazer',
+    'places': 'Seu lugar favorito',
+    'objects': 'Seu brinquedo favorito',
+    'clothes': 'Sua roupa favorita',
+  };
+
   DinoLine rememberFavorite(String category, VocabularyEntry word) => DinoLine(
     'Your favorite ${topicNames[category] ?? category} is ${word.english}!',
-    'Seu(sua) ${_topicNamesPt[category] ?? category} favorito(a) é ${word.portuguese}!',
+    '${_yourFavoritePt[category] ?? 'Seu favorito'} é ${word.portuguese}!',
   );
 
   // ---- companion: learning words met in conversation ---------------------------
@@ -842,18 +863,21 @@ class ResponseGenerator {
         'Ainda estou aprendendo! Tente: What does dog mean?',
       );
     }
-    // Never a flat "não entendi": always an invitation to try again.
+    // Never a flat "não entendi", never invented knowledge: honest and
+    // inviting.
     return _pick(const [
+      DinoLine("I don't know that yet.", 'Eu ainda não sei isso.'),
+      DinoLine(
+        "Hmm... I don't understand yet.",
+        'Hmm... Eu ainda não entendi.',
+      ),
+      DinoLine("Let's try something else!", 'Vamos tentar outra coisa!'),
       DinoLine(
         "Hmm... I don't know that yet! Can you teach me?",
         'Hmm... Ainda não sei isso! Você pode me ensinar?',
       ),
       DinoLine('Try saying it another way!', 'Vamos tentar de outro jeito!'),
       DinoLine('Can you say it in English?', 'Você consegue falar em inglês?'),
-      DinoLine(
-        'Rawr? I am a baby dino! Say it another way?',
-        'Rawr? Sou um dino bebê! Fala de outro jeito?',
-      ),
     ]);
   }
 
