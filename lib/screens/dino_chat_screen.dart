@@ -16,6 +16,7 @@ import '../core/companion/companion_state.dart';
 import '../core/companion/companion_state_machine.dart';
 import '../core/companion/interaction/companion_interaction_controller.dart';
 import '../core/companion/model/companion_model.dart';
+import '../core/companion/pet_scene.dart';
 import '../core/companion/food/food_item.dart';
 import '../core/companion/voice/companion_voice_service.dart';
 import '../core/companion/voice/speech_recognition_service.dart';
@@ -33,6 +34,7 @@ import '../widgets/companion/food_drag.dart';
 import '../widgets/companion/food_panel.dart';
 import '../widgets/companion/hearts_burst.dart';
 import '../widgets/companion/mixed_line_text.dart';
+import '../widgets/companion/scene_background.dart';
 import 'exam_screen.dart';
 import 'sentence_builder_screen.dart';
 import 'word_slash_game_screen.dart';
@@ -246,6 +248,10 @@ class _DinoChatScreenState extends ConsumerState<DinoChatScreen>
                           bedroom: chat.bedroom,
                           walkingToBed: chat.walkingToBed,
                           ballGame: chat.ballGame,
+                          scene: chat.scene,
+                          wakingUp: chat.wakingUp,
+                          quietPlay: chat.quietPlay,
+                          onToggleQuiet: notifier.toggleQuietPlay,
                           onGoToBed: () => unawaited(notifier.goToBed()),
                           onBallHit: (combo) =>
                               unawaited(notifier.ballHit(combo)),
@@ -495,6 +501,10 @@ class _PetStage extends ConsumerStatefulWidget {
     required this.bedroom,
     required this.walkingToBed,
     required this.ballGame,
+    required this.scene,
+    required this.wakingUp,
+    required this.quietPlay,
+    required this.onToggleQuiet,
     required this.onGoToBed,
     required this.onBallHit,
     required this.onBallStopped,
@@ -539,6 +549,16 @@ class _PetStage extends ConsumerStatefulWidget {
 
   /// The bouncing-ball game is on.
   final bool ballGame;
+
+  /// The room (and activity) the Dino is in.
+  final PetScene scene;
+
+  /// Getting out of bed: it stays on the bed until it's up.
+  final bool wakingUp;
+
+  /// The ball game without voice (🔇).
+  final bool quietPlay;
+  final VoidCallback onToggleQuiet;
   final VoidCallback onGoToBed;
   final ValueChanged<int> onBallHit;
   final ValueChanged<int> onBallStopped;
@@ -648,12 +668,13 @@ class _PetStageState extends ConsumerState<_PetStage> {
     final animation = widget.animation;
     final reaction = _reaction[animation];
     final voice = ref.watch(companionVoiceServiceProvider);
-    final room = widget.bedroom || widget.sleeping;
+    final room = widget.scene == PetScene.sleep;
+    final background = widget.scene.background;
     // Walking to the bed, then sleeping on it (relative position: works
     // on any screen size and for any Dino model).
     final placement = _interaction.placement(
       walkingToBed: widget.walkingToBed,
-      sleeping: widget.sleeping,
+      sleeping: widget.sleeping || widget.wakingUp,
       inBedroom: room,
     );
     final mouthZone = _interaction.mouthZone();
@@ -663,10 +684,21 @@ class _PetStageState extends ConsumerState<_PetStage> {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              if (room)
-                Positioned.fill(
-                  child: BedroomBackground(night: widget.sleeping),
+              // The room of the current activity (a fade between rooms).
+              Positioned.fill(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 350),
+                  child: background == null
+                      ? BedroomBackground(
+                          key: const ValueKey('room-bedroom'),
+                          night: widget.sleeping,
+                        )
+                      : SceneBackground(
+                          key: ValueKey('room-${widget.scene.name}'),
+                          asset: background,
+                        ),
                 ),
+              ),
               if (room)
                 Positioned(
                   right: 4,
@@ -720,6 +752,11 @@ class _PetStageState extends ConsumerState<_PetStage> {
                                     talking: utterance != null,
                                   ),
                                 ),
+                                if (widget.sleeping)
+                                  const Align(
+                                    alignment: Alignment(0.45, -0.35),
+                                    child: SleepingZs(),
+                                  ),
                                 // The mouth's drop zone, from the model's mouth
                                 // point: it follows the Dino on any screen.
                                 Align(
@@ -794,6 +831,8 @@ class _PetStageState extends ConsumerState<_PetStage> {
                         talking: utterance != null,
                         playing: true,
                       ),
+                      quiet: widget.quietPlay,
+                      onToggleQuiet: widget.onToggleQuiet,
                       onHit: widget.onBallHit,
                       onStopped: widget.onBallStopped,
                       onFinish: widget.onStopBall,

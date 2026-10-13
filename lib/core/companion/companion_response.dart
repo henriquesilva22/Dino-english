@@ -21,6 +21,9 @@ enum CompanionAnimation {
   playing,
   sleeping,
 
+  /// Getting out of bed (once).
+  wakingUp,
+
   /// Walking somewhere (to its bed).
   walking,
   talking,

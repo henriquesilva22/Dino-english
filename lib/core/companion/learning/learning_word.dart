@@ -58,6 +58,8 @@ class LearningWord {
     this.templates = const [],
     this.useTypeTemplates = true,
     this.contexts = const [],
+    this._forms,
+    this.insertable = true,
   });
 
   factory LearningWord.fromJson(Map<String, dynamic> json) {
@@ -91,6 +93,8 @@ class LearningWord {
       contexts: [
         for (final c in json['contexts'] as List? ?? const []) c as String,
       ],
+      forms: [for (final f in json['forms'] as List? ?? const []) f as String],
+      insertable: json['insert'] as bool? ?? true,
     );
   }
 
@@ -120,6 +124,21 @@ class LearningWord {
 
   /// Moments it fits naturally: `food`, `drink`, `play`, `sleep`...
   final List<String> contexts;
+
+  final List<String>? _forms;
+
+  /// The Portuguese words a reply may use for it ("quero", "com fome"):
+  /// a reply can show the English word in their place. Defaults to the
+  /// meaning(s).
+  List<String> get forms {
+    final own = _forms;
+    if (own != null && own.isNotEmpty) return own;
+    return [for (final m in portuguese.split(',')) m.trim()];
+  }
+
+  /// False for words that would break a Portuguese sentence if swapped
+  /// in ("sim", "não", "ir"...).
+  final bool insertable;
 
   /// How it is shown and voiced inside a sentence: `WALK`.
   String get display => english.toUpperCase();

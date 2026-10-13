@@ -12,6 +12,7 @@ enum CompanionAnim {
   jump,
   eating,
   sleeping,
+  wakeUp,
   happy,
   talking,
 }
@@ -154,6 +155,10 @@ class CompanionModel {
       CompanionAnim.eating: CompanionClip('eating', seconds: 16.2917),
       CompanionAnim.happy: CompanionClip('happy', seconds: 2.4167),
       CompanionAnim.jump: CompanionClip('jump', seconds: 0.9167),
+      // Lying in bed (assets/glbs/dinodeitado.glb), breathing slowly.
+      CompanionAnim.sleeping: CompanionClip('sleep', seconds: 4),
+      // Getting out of bed (assets/glbs/dinolevantando.glb), once.
+      CompanionAnim.wakeUp: CompanionClip('wakeUp', seconds: 4.4167),
     },
     walkSpeed: 0.7856,
     runSpeed: 1.254,

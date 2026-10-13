@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dino_english/core/database/app_database.dart';
 import 'package:dino_english/core/models/word_candidate.dart';
 import 'package:dino_english/core/repositories/word_repository.dart';
+import 'package:dino_english/core/services/word_review_selector.dart';
 import 'package:dino_english/core/services/distractor_picker.dart';
 import 'package:dino_english/game/sound/word_slash_sfx.dart';
 import 'package:dino_english/game/sound/word_slash_sound_service.dart';
@@ -37,6 +38,9 @@ class _GatedWordRepository implements WordRepository {
   final WordRepository _real;
   Completer<void>? candidatePoolGate;
   int fetchActiveWordsCallCount = 0;
+
+  @override
+  Future<List<ReviewCandidate>> fetchReviewPool() => _real.fetchReviewPool();
 
   @override
   Future<List<WordCandidate>> fetchCandidatePool() async {

@@ -282,10 +282,10 @@ function faceForward(clip) {
 /** Measures the real soles: the mesh's lowest vertices (bind pose), skinned
  *  like the renderer does. [groundClip] moves the hips so the lowest sole
  *  of the whole clip touches y = 0 -- never buried, never floating. */
-function makeSoles(base) {
+function makeSoles(base, maxBindY = 0.06) {
   const soles = [];
   base.positions.forEach((p, i) => {
-    if (p[1] > 0.06) return;
+    if (p[1] > maxBindY) return;
     soles.push(base.joints[i].map((j, c) => {
       const m = base.ibm[j];
       const local = [0, 1, 2].map((r) => m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r]);
@@ -311,6 +311,17 @@ function makeSoles(base) {
       for (let k = 0; k < clip.frames; k++) min = Math.min(min, lowest(clip, k));
       clip.tracks[HIPS].t = clip.tracks[HIPS].t.map((t) => [t[0], t[1] - min, t[2]]);
       return -min;
+    },
+    /** Grounds every frame on its own (a clip that goes from lying to
+     *  standing): returns the largest lift. */
+    groundEachFrame(clip) {
+      let most = 0;
+      clip.tracks[HIPS].t = clip.tracks[HIPS].t.map((t, k) => {
+        const min = lowest(clip, k);
+        most = Math.max(most, -min);
+        return [t[0], t[1] - min, t[2]];
+      });
+      return most;
     },
     lowest,
   };
@@ -355,6 +366,18 @@ function idleWobble(name, ph) {
     case 'mixamorig:RightShoulder': return [[Z, -1.2 * breath]];
     case 'mixamorig:Neck': return [[Y, 4 * sin(ph, 1, 0.1)]];
     case 'mixamorig:Head': return [[X, 1.5 * sin(ph, 2, 0.3)], [Z, 1.5 * sin(ph, 1, 0.6)]];
+    default: return [];
+  }
+}
+
+/** Sleeping: slow, deep breaths, the head resting (lying pose). */
+function sleepWobble(name, ph) {
+  const breath = sin(ph, 1); // one slow breath per 4 s loop
+  switch (name) {
+    case 'mixamorig:Spine': return [[X, 1.6 * breath]];
+    case 'mixamorig:Spine1': return [[X, 1.4 * breath]];
+    case 'mixamorig:Spine2': return [[X, 1.2 * breath]];
+    case 'mixamorig:Head': return [[X, 0.8 * sin(ph, 1, 0.2)]];
     default: return [];
   }
 }
@@ -521,7 +544,22 @@ if (require.main === module) {
     console.log('punch reach per frame:', reach.map((x) => x.toFixed(2)).join(' '));
   }
 
-  const clips = { idle, talk, walk, run, attack, eating, happy, jump };
+  // Bedtime: lying down (a still pose, breathing slowly) and getting up
+  // (played once). Lying, the soles are not the lowest point: these two
+  // are grounded by the whole body.
+  const body = makeSoles(base, Infinity);
+  const lying = extractClip('dinodeitado.glb');
+  const lyingPose = { duration: 0, frames: 1, tracks: {} };
+  for (const [n, p] of Object.entries(poseAt(lying, 0))) {
+    lyingPose.tracks[n] = { t: [p.t], r: [p.r] };
+  }
+  lift.sleep = +body.groundClip(lyingPose).toFixed(4);
+  const sleep = proceduralClip(poseAt(lyingPose, 0), 4, sleepWobble);
+  const wakeUp = extractClip('dinolevantando.glb');
+  inPlace(wakeUp);
+  lift.wakeUp = +body.groundEachFrame(wakeUp).toFixed(4);
+
+  const clips = { idle, talk, walk, run, attack, eating, happy, jump, sleep, wakeUp };
   writeGlb(base, clips, OUT);
 
   const head = base.fk(standing, 0)('mixamorig:Head').p;

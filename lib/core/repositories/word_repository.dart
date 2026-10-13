@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../database/app_database.dart';
 import '../models/word_candidate.dart';
 import '../services/distractor_picker.dart';
+import '../services/word_review_selector.dart';
 
 /// Read-only access to the `words` bank, shaped for the pure services
 /// ([WordSelectionService], [DistractorPicker]) that don't know about the
@@ -41,6 +42,43 @@ class WordRepository {
   Future<List<Word>> fetchActiveWords() => (_database.select(
     _database.words,
   )..where((w) => w.isActive.equals(true))).get();
+
+  /// Every active word with what the child did with it, for the
+  /// profile's review ([WordReviewSelector]). Read-only.
+  Future<List<ReviewCandidate>> fetchReviewPool() async {
+    final query = _database.select(_database.words).join([
+      leftOuterJoin(
+        _database.wordProgress,
+        _database.wordProgress.wordId.equalsExp(_database.words.id),
+      ),
+    ])..where(_database.words.isActive.equals(true));
+    final rows = await query.get();
+    // Words talked about with the Dino (its memory keeps their ids).
+    final talked = {
+      for (final m in await (_database.select(
+        _database.dinoMemories,
+      )..where((t) => t.kind.equals('learnedWord'))).get())
+        m.memoryKey,
+    };
+    return [
+      for (final row in rows)
+        if (row.readTable(_database.words) case final word)
+          ReviewCandidate(
+            wordId: word.id,
+            english: word.englishTerm,
+            portuguese: word.portugueseTranslation,
+            studied: row.readTableOrNull(_database.wordProgress) != null,
+            metInConversation: talked.contains(word.id),
+            lastResultCorrect: row
+                .readTableOrNull(_database.wordProgress)
+                ?.lastResultCorrect,
+            incorrectCount:
+                row.readTableOrNull(_database.wordProgress)?.incorrectCount ??
+                0,
+            lastSeenAt: row.readTableOrNull(_database.wordProgress)?.lastSeenAt,
+          ),
+    ];
+  }
 
   Future<Word?> fetchWordById(String id) => (_database.select(
     _database.words,

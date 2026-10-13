@@ -16,8 +16,10 @@ import '../game/pet_adventure_game.dart';
 import '../game/pet_component.dart';
 import '../game/sound/adventure_sfx.dart';
 import '../game/sound/adventure_sound_service.dart';
+import '../game/sound/word_catch_voice.dart';
 import '../providers/minigame_providers.dart';
 import '../providers/pet_adventure_providers.dart';
+import '../providers/speech_providers.dart';
 import '../theme/neon_colors.dart';
 import '../widgets/companion/dino_animated_model.dart';
 import '../widgets/home/tap_scale.dart';
@@ -150,10 +152,17 @@ class _PetAdventurePlayAreaState extends ConsumerState<_PetAdventurePlayArea> {
   late final PetAdventureGame _game;
   late final AdventureSoundService _sound;
 
+  /// Says each caught word in English ("Bread!") / "Errou!".
+  late final WordCatchVoice _voice;
+
   @override
   void initState() {
     super.initState();
     _sound = ref.read(adventureSoundServiceProvider);
+    _voice = WordCatchVoice(
+      english: () => ref.read(speechServiceProvider),
+      portuguese: () => ref.read(portugueseVoiceProvider),
+    );
     // Round state (lives/score/boss HP) is reset by the *caller* --
     // whichever button navigated here -- via `resetMinigameState`, before
     // this screen is pushed. Doing it here instead used to crash with
@@ -165,6 +174,7 @@ class _PetAdventurePlayAreaState extends ConsumerState<_PetAdventurePlayArea> {
       correctWordPool: widget.correctWordPool,
       sound: _sound,
       isBossFight: widget.isBossFight,
+      onWordCatch: _voice.say,
       onCollectCorrect: (word) => unawaited(
         ref.read(minigameControllerProvider.notifier).collectCorrectWord(word),
       ),
@@ -180,6 +190,12 @@ class _PetAdventurePlayAreaState extends ConsumerState<_PetAdventurePlayArea> {
           : null,
     );
     widget.onGameCreated(_game);
+  }
+
+  @override
+  void dispose() {
+    unawaited(_voice.close());
+    super.dispose();
   }
 
   /// Shots fired (the 3D Dino punches with each) and when the last one was.

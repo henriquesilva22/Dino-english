@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/services/level_curve.dart';
+import '../core/services/word_review_selector.dart';
 import '../providers/home_providers.dart';
+import '../providers/navigation_providers.dart';
+import '../providers/word_review_providers.dart';
 import '../theme/neon_colors.dart';
 import '../widgets/home/egg_stage_copy.dart';
 import '../widgets/neon_background.dart';
@@ -83,6 +86,20 @@ class ProfileScreen extends ConsumerWidget {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            // The current balance (earned minus spent), the
+                            // same number the shop uses.
+                            _StatChip(
+                              key: const ValueKey('profile-coins'),
+                              icon: '🪙',
+                              label: 'Moedas',
+                              value: '${profile.coins}',
+                              color: NeonColors.green,
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   );
@@ -125,6 +142,8 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+              const WordReviewSection(),
               const SizedBox(height: 16),
               eggProgressAsync.when(
                 loading: () => const SizedBox.shrink(),
@@ -174,6 +193,7 @@ class ProfileScreen extends ConsumerWidget {
 
 class _StatChip extends StatelessWidget {
   const _StatChip({
+    super.key,
     required this.icon,
     required this.label,
     required this.value,
@@ -248,6 +268,123 @@ class _MasteryLevelBar extends StatelessWidget {
           style: const TextStyle(color: NeonColors.textSecondary, fontSize: 10),
         ),
       ],
+    );
+  }
+}
+
+/// "Revisão de palavras": a few English words and their meaning from the
+/// word bank -- the ones the child got wrong or met lately first. The
+/// same set while the profile is open; a new one with 🔄 or when the
+/// profile is opened again.
+class WordReviewSection extends ConsumerWidget {
+  const WordReviewSection({super.key});
+
+  /// The profile's tab in the app shell.
+  static const int profileTab = 3;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen<int>(selectedTabIndexProvider, (previous, next) {
+      if (next == profileTab && previous != profileTab) {
+        ref.read(wordReviewRoundProvider.notifier).next();
+      }
+    });
+    final theme = Theme.of(context);
+    final review = ref.watch(wordReviewProvider);
+    final hint = theme.textTheme.bodySmall?.copyWith(
+      color: NeonColors.textSecondary,
+    );
+    return NeonPanel(
+      accentColor: NeonColors.orange,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Revisão de palavras',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: NeonColors.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              IconButton(
+                key: const ValueKey('word-review-refresh'),
+                tooltip: 'Outras palavras',
+                visualDensity: VisualDensity.compact,
+                onPressed: () =>
+                    ref.read(wordReviewRoundProvider.notifier).next(),
+                icon: const Icon(
+                  Icons.refresh_rounded,
+                  color: NeonColors.orange,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          review.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(8),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (_, _) => Text(
+              'Não foi possível carregar as palavras agora.',
+              style: hint,
+            ),
+            data: (words) => words.isEmpty
+                ? Text(
+                    'Estude algumas palavras para revisá-las aqui!',
+                    style: hint,
+                  )
+                : Column(
+                    children: [for (final w in words) _ReviewRow(word: w)],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewRow extends StatelessWidget {
+  const _ReviewRow({required this.word});
+
+  final ReviewCandidate word;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      key: ValueKey('review-${word.wordId}'),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              word.english,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: NeonColors.orange,
+                fontWeight: FontWeight.w800,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const Text('→', style: TextStyle(color: NeonColors.textSecondary)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              word.portuguese,
+              textAlign: TextAlign.end,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: NeonColors.textPrimary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

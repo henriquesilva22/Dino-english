@@ -36,7 +36,10 @@ class PiperPortugueseVoice implements PortugueseVoiceService {
   Completer<void>? _playing;
   int _generation = 0;
 
-  static void _log(String message) => debugPrint('[voice-pt] $message');
+  /// Technical status only; debug builds only.
+  static void _log(String message) {
+    if (kDebugMode) debugPrint('[voice-pt] $message');
+  }
 
   /// Loads the voice ahead of time (the first sentence then starts fast).
   Future<void> warmUp() async => _broken ? null : await _ensureWorker();

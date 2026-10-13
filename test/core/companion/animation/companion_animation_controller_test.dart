@@ -82,13 +82,18 @@ void main() {
       expect(animations.plan(CompanionActivity.talking).clip, 'talk');
     });
 
-    test('eating and happy have clips; sleeping falls back to idle', () {
+    test('eating, happy and sleeping have clips; waking up plays once', () {
       expect(animations.plan(CompanionActivity.eating).clip, 'eating');
       expect(animations.plan(CompanionActivity.happy).clip, 'happy');
-      // No sleeping clip yet: no fake one either.
+      // Lying in bed (dinodeitado), looping.
       final sleeping = animations.plan(CompanionActivity.sleeping);
-      expect(sleeping.clip, 'idle');
+      expect(sleeping.clip, 'sleep');
       expect(sleeping.loop, isTrue);
+      // Getting up (dinolevantando): once, then standing.
+      final waking = animations.plan(CompanionActivity.wakingUp);
+      expect(waking.clip, 'wakeUp');
+      expect(waking.loop, isFalse);
+      expect(waking.rest, 'idle');
     });
 
     test('a punch plays once, then the rest pose', () {

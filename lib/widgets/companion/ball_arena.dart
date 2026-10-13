@@ -25,6 +25,8 @@ class BallArena extends StatefulWidget {
     required this.onHit,
     required this.onStopped,
     required this.onFinish,
+    this.quiet = false,
+    this.onToggleQuiet,
     super.key,
   });
 
@@ -40,6 +42,10 @@ class BallArena extends StatefulWidget {
 
   /// "Parar": hits, best combo, time played.
   final void Function(int hits, int bestCombo, Duration played) onFinish;
+
+  /// Playing without the Dino's voice (🔇); [onToggleQuiet] switches it.
+  final bool quiet;
+  final VoidCallback? onToggleQuiet;
 
   @override
   State<BallArena> createState() => _BallArenaState();
@@ -215,6 +221,20 @@ class _BallArenaState extends State<BallArena>
                 hint: _game.hits == 0,
               ),
             ),
+            if (widget.onToggleQuiet case final toggle?)
+              Positioned(
+                right: 104,
+                top: 4,
+                child: IconButton.filledTonal(
+                  key: const ValueKey('ball-quiet'),
+                  tooltip: widget.quiet ? 'Ligar a voz' : 'Brincar sem voz',
+                  onPressed: toggle,
+                  icon: Text(
+                    widget.quiet ? '🔇' : '🔊',
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                ),
+              ),
             Positioned(
               right: 8,
               top: 4,

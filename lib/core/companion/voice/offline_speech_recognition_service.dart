@@ -243,5 +243,8 @@ class OfflineSpeechRecognitionService implements SpeechRecognitionService {
   }
 
   /// Visible in `adb logcat` (tag `flutter`), also in release builds.
-  static void _log(String message) => debugPrint('[voice] $message');
+  /// Technical status only (never what the child said); debug builds only.
+  static void _log(String message) {
+    if (kDebugMode) debugPrint('[voice] $message');
+  }
 }

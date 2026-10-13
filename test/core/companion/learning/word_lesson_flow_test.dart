@@ -186,18 +186,17 @@ void main() {
     var hybrids = 0;
     for (var i = 0; i < 8; i++) {
       final r = await engine.process(i.isEven ? 'Eu te amo' : 'Você é fofo');
-      final mixed = r.lines.where((l) => l.isMixed).toList();
-      expect(mixed.length, lessThanOrEqualTo(1));
-      if (mixed.isNotEmpty) {
+      // Portuguese, never more than one English word per reply.
+      expect(r.lines.every((l) => l.isMixed), isTrue);
+      final words = [for (final l in r.lines) ...l.english!];
+      expect(words.length, lessThanOrEqualTo(1));
+      expect(r.portugueseText, isNull, reason: 'no translation on screen');
+      if (words.isNotEmpty) {
         hybrids++;
-        expect(mixed.single.english, hasLength(1));
-        expect(
-          engine.brain.context.lastTargetWord,
-          mixed.single.english!.single.toLowerCase(),
-        );
+        expect(engine.brain.context.lastTargetWord, words.single.toLowerCase());
       }
     }
-    expect(hybrids, inInclusiveRange(2, 6));
+    expect(hybrids, greaterThanOrEqualTo(4));
   });
 
   test('tapping a word: explain it, or straight to practice', () async {

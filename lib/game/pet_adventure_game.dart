@@ -25,6 +25,7 @@ import 'pets/pet_catalog.dart';
 import 'projectile_component.dart';
 import 'sound/adventure_sfx.dart';
 import 'sound/adventure_sound_service.dart';
+import 'word_catch.dart';
 import 'word_component.dart';
 import 'word_spawner.dart';
 
@@ -54,6 +55,7 @@ class PetAdventureGame extends FlameGame with HasCollisionDetection {
     required this.sound,
     this.isBossFight = false,
     this.onBossStateChanged,
+    this.onWordCatch,
     DifficultyConfig? difficulty,
     Random? random,
   }) : difficulty = difficulty ?? DifficultyConfig.standard(),
@@ -86,6 +88,10 @@ class PetAdventureGame extends FlameGame with HasCollisionDetection {
   final void Function(Word word) onCollectCorrect;
   final VoidCallback onCollectIncorrect;
   final AdventureSoundService sound;
+
+  /// A word was caught (correct or not) -- the only event the Dino
+  /// speaks for. Never called for shots or the boss's attacks.
+  final void Function(WordCatch caught)? onWordCatch;
   final Random _random;
 
   /// Whether this round is the boss fight rather than the normal
@@ -347,6 +353,7 @@ class PetAdventureGame extends FlameGame with HasCollisionDetection {
       );
       dino.reactToCorrect();
       sound.play(AdventureSfx.correct);
+      onWordCatch?.call(CorrectWordCaught(word.word!.englishTerm));
       onCollectCorrect(word.word!);
       _damageBoss(
         BossFightState.damageForWordDifficulty(word.word!.difficulty),
@@ -358,6 +365,7 @@ class PetAdventureGame extends FlameGame with HasCollisionDetection {
       dino.reactToIncorrect();
       sound.play(AdventureSfx.incorrect);
       unawaited(HapticFeedback.mediumImpact());
+      onWordCatch?.call(WrongWordCaught(word.label));
       onCollectIncorrect();
     }
   }

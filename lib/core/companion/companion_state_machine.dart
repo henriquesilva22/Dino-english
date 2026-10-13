@@ -19,6 +19,9 @@ enum CompanionActivity {
   talking(CompanionAnim.talking),
   eating(CompanionAnim.eating),
   sleeping(CompanionAnim.sleeping),
+
+  /// Getting out of bed: played once, then idle.
+  wakingUp(CompanionAnim.wakeUp),
   happy(CompanionAnim.happy);
 
   const CompanionActivity(this.anim);
@@ -26,7 +29,11 @@ enum CompanionActivity {
   final CompanionAnim anim;
 
   /// Played once, then the companion goes back to rest.
-  bool get oneShot => this == playing || this == attacking || this == jumping;
+  bool get oneShot =>
+      this == playing ||
+      this == attacking ||
+      this == jumping ||
+      this == wakingUp;
 }
 
 /// How the body moves through the world (set by the movement controller).
@@ -49,6 +56,9 @@ class CompanionStateMachine {
   }) {
     if (engine == CompanionAnimation.sleeping) {
       return CompanionActivity.sleeping;
+    }
+    if (engine == CompanionAnimation.wakingUp) {
+      return CompanionActivity.wakingUp;
     }
     if (attacking) return CompanionActivity.attacking;
     switch (gait) {

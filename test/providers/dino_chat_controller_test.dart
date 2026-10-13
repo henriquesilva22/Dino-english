@@ -5,9 +5,9 @@ import 'package:dino_english/core/brain/model/dino_enums.dart';
 import 'package:dino_english/core/companion/companion_response.dart';
 import 'package:dino_english/core/companion/companion_engine.dart';
 import 'package:dino_english/core/companion/food/food_item.dart';
+import 'package:dino_english/core/companion/pet_scene.dart';
 import 'package:dino_english/core/companion/voice/portuguese_voice.dart';
 import 'package:dino_english/core/companion/engine/companion_intent.dart';
-import 'package:dino_english/core/companion/voice/companion_voice_service.dart';
 import 'package:dino_english/core/companion/voice/speech_recognition_service.dart';
 import 'package:dino_english/core/database/app_bootstrap.dart';
 import 'package:dino_english/core/database/app_database.dart';
@@ -46,8 +46,11 @@ class _FakeSpeechService implements SpeechService {
     return SpeechResult.spoken;
   }
 
+  /// Times the voice was cut off.
+  int stops = 0;
+
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async => stops++;
 
   @override
   ValueListenable<Object?> get activeUtterance => utterance;
@@ -251,7 +254,9 @@ void main() {
       subscription = container.listen(dinoChatProvider, (_, _) {});
       final reopened = await ready();
       expect(reopened.companion!.isSleeping, isTrue);
-      expect(reopened.lastResponse!.text, contains('Z z z'));
+      // Portuguese, with the English word to say ("WAKE UP").
+      expect(reopened.lastResponse!.text, contains('dormindo'));
+      expect(reopened.scene, PetScene.sleep);
     },
   );
 
@@ -289,7 +294,8 @@ void main() {
         expect(talking.heardText, 'Dino, você gosta de maçã?');
         expect(talking.dinoSpeaking, isTrue);
         expect(recognizer.running, isFalse, reason: 'never hears itself');
-        expect(speech.locales.last, 'en-US');
+        // Portuguese, with one English word in the English voice.
+        expect(speech.locales, containsAll(['pt-BR', 'en-US']));
 
         speech.hold!.complete();
         speech.hold = null;
@@ -297,8 +303,7 @@ void main() {
           DinoChatController.resumeDelay + const Duration(milliseconds: 100),
         );
         final after = container.read(dinoChatProvider);
-        // Asked in Portuguese, answered in English: English voice only.
-        expect(speech.locales.last, 'en-US');
+        expect(speech.locales, containsAll(['pt-BR', 'en-US']));
         expect(after.dinoSpeaking, isFalse);
         expect(after.voiceState, VoiceState.listening);
         expect(recognizer.running, isTrue);
@@ -313,9 +318,10 @@ void main() {
         await notifier.send('Eu gosto de azul');
         await notifier.send('Qual é minha cor favorita?');
         final r = container.read(dinoChatProvider).lastResponse!;
-        // (A Portuguese sentence with an English word may follow.)
-        expect(r.lines.first.text, 'Your favorite color is blue!');
-        expect(r.portugueseText, 'Sua cor favorita é azul!');
+        // Portuguese with the English word -- no translation on screen.
+        expect(r.lines.first.text, 'Sua cor favorita é BLUE!');
+        expect(r.lines.first.english, ['BLUE']);
+        expect(r.portugueseText, isNull);
       },
     );
 
@@ -330,7 +336,7 @@ void main() {
       final like = rows.lastWhere((r) => r.childText == 'Você gosta de maçã?');
       expect(like.intent, 'askLike');
       expect(like.word, 'apple');
-      expect(like.portugueseText, isNotNull);
+      expect(like.englishText, isNotEmpty);
 
       subscription.close();
       container.invalidate(dinoChatProvider);
@@ -345,7 +351,7 @@ void main() {
           .send('Qual é o meu nome?');
       expect(
         container.read(dinoChatProvider).lastResponse!.englishText,
-        'Your name is Ana!',
+        'Seu nome é Ana!',
       );
     });
 
@@ -398,8 +404,10 @@ void main() {
       expect(offered.offered, DinoCare.feed);
       expect(offered.offeredFood, FoodCatalog.bread);
       expect(offered.foodHint, isTrue);
-      expect(offered.lastResponse!.englishText, contains('bread'));
-      expect(offered.lastResponse!.portugueseText, contains('pão'));
+      expect(offered.scene, PetScene.food);
+      // "Vamos comer BREAD!": the food's own English word, no subtitle.
+      expect(offered.lastResponse!.text, contains('BREAD'));
+      expect(offered.lastResponse!.portugueseText, isNull);
 
       final eating = notifier.deliverOffered();
       await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -416,8 +424,7 @@ void main() {
       expect(after.xpEarned, 5);
       expect(after.heartsToken, offered.heartsToken + 1);
       expect(after.animation, CompanionAnimation.happy);
-      expect(after.lastResponse!.englishText, contains('Yummy! Bread!'));
-      expect(after.lastResponse!.portugueseText, contains('Delícia! Pão!'));
+      expect(after.lastResponse!.text, contains('Delícia! BREAD!'));
 
       // The hint was learned; feeding never pays coins.
       await notifier.selectFood(FoodCatalog.apple);
@@ -433,7 +440,11 @@ void main() {
       final bedroom = container.read(dinoChatProvider);
       expect(bedroom.bedroom, isTrue);
       expect(bedroom.companion!.isSleeping, isFalse);
-      expect(bedroom.lastResponse!.englishText.toLowerCase(), contains('bed'));
+      expect(bedroom.scene, PetScene.sleep);
+      expect(
+        bedroom.lastResponse!.text.toLowerCase(),
+        anyOf(contains('cama'), contains('bed')),
+      );
 
       final going = notifier.goToBed();
       await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -447,11 +458,24 @@ void main() {
       expect(asleep.walkingToBed, isFalse);
       expect(asleep.companion!.isSleeping, isTrue);
 
+      expect(asleep.animation, CompanionAnimation.sleeping);
+
+      // Getting up: once, still on the bed; then out of the bedroom.
       await notifier.wakeUp();
+      final waking = container.read(dinoChatProvider);
+      expect(waking.wakingUp, isTrue);
+      expect(waking.animation, CompanionAnimation.wakingUp);
+      expect(waking.scene, PetScene.sleep);
+      expect(waking.lastResponse!.text, contains('GOOD MORNING'));
+      await notifier.wakeUp(); // a second tap doesn't get up twice
+      await Future<void>.delayed(
+        DinoChatController.wakeUpDuration + const Duration(milliseconds: 100),
+      );
       final awake = container.read(dinoChatProvider);
+      expect(awake.wakingUp, isFalse);
       expect(awake.bedroom, isFalse);
-      expect(awake.lastResponse!.englishText, contains('Good morning'));
-      expect(awake.lastResponse!.portugueseText, contains('Bom dia'));
+      expect(awake.scene, PetScene.home);
+      expect(awake.animation, isNot(CompanionAnimation.wakingUp));
     });
 
     test('Brincar: the ball game -- first hit plays, combos cheer, '
@@ -482,7 +506,8 @@ void main() {
       );
       final over = container.read(dinoChatProvider);
       expect(over.ballGame, isFalse);
-      expect(over.lastResponse!.englishText, contains('10 hits'));
+      expect(over.scene, PetScene.home);
+      expect(over.lastResponse!.text, contains('10 batidas'));
     });
 
     test('back closes one thing at a time: ball game, then nothing', () async {
@@ -506,15 +531,15 @@ void main() {
                     .read(dinoChatProvider)
                     .lastResponse
                     ?.englishText
-                    .contains('3 hits') ??
+                    .contains('3 batidas') ??
                 false);
         i++
       ) {
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
       expect(
-        container.read(dinoChatProvider).lastResponse!.englishText,
-        contains('3 hits'),
+        container.read(dinoChatProvider).lastResponse!.text,
+        contains('3 batidas'),
       );
       expect(notifier.hasOpenActivity, isFalse);
       expect(notifier.back(), isFalse); // now the screen may close
@@ -628,7 +653,7 @@ void main() {
       expect(child.text, 'Você está com fome?');
       expect(child.viaVoice, isTrue);
       expect(state.lastResponse!.intent, CompanionIntent.askHungry);
-      expect(state.lastResponse!.portugueseText, isNotNull);
+      expect(state.lastResponse!.lines.first.isMixed, isTrue);
       // Listening again once the Dino has finished talking.
       await Future<void>.delayed(
         DinoChatController.resumeDelay + const Duration(milliseconds: 80),
@@ -671,31 +696,35 @@ void main() {
       expect(after.voiceState, VoiceState.listening);
     });
 
-    test(
-      'asked in Portuguese: English voice; "não entendi": Portuguese',
-      () async {
-        await voiceSettled();
-        final notifier = container.read(dinoChatProvider.notifier);
-        await notifier.send('Você gosta de maçã?');
-        await pump();
-        final response = container.read(dinoChatProvider).lastResponse!;
-        expect(
-          speech.spoken.last,
-          TtsCompanionVoiceService.speakable(response.lines.single.text),
-        );
-        expect(speech.locales.last, 'en-US');
+    test('asked in Portuguese: Portuguese voice with the English word in '
+        'English; "não entendi": what that word means', () async {
+      await voiceSettled();
+      final notifier = container.read(dinoChatProvider.notifier);
+      final start = speech.spoken.length;
+      // A sentence with a new English word in it.
+      await notifier.send('me ensina uma palavra');
+      await pump();
+      final response = container.read(dinoChatProvider).lastResponse!;
+      // One English word somewhere in the reply, no translation.
+      final word = {for (final l in response.lines) ...?l.english}.single;
+      expect(response.portugueseText, isNull);
+      final said = [
+        for (var i = start; i < speech.spoken.length; i++)
+          '${speech.locales[i]} ${speech.spoken[i]}',
+      ];
+      expect(said, contains('en-US $word'));
+      expect(said.where((l) => l.startsWith('pt-BR')), isNotEmpty);
 
-        await notifier.send('Não entendi.');
-        await pump();
-        expect(
-          speech.spoken.last,
-          TtsCompanionVoiceService.speakable(
-            response.lines.single.translation!,
-          ),
-        );
-        expect(speech.locales.last, 'pt-BR');
-      },
-    );
+      await notifier.send('Não entendi.');
+      await pump();
+      final explained = container.read(dinoChatProvider).lastResponse!;
+      expect(explained.text, contains(word));
+      expect(
+        explained.text,
+        matches(RegExp('significa|quer dizer| é ', caseSensitive: false)),
+      );
+      expect(speech.locales, contains('pt-BR'));
+    });
 
     test('without a Portuguese voice it still speaks English', () async {
       speech.missing.add('pt-BR');
@@ -704,10 +733,8 @@ void main() {
       await container.read(dinoChatProvider.notifier).send('Oi');
       await pump();
       expect(speech.locales.sublist(start), everyElement('en-US'));
-      expect(
-        container.read(dinoChatProvider).lastResponse!.portugueseText,
-        isNotNull,
-      );
+      // The whole reply stays on screen.
+      expect(container.read(dinoChatProvider).lastResponse!.text, isNotEmpty);
     });
 
     test('when the child talks the Dino turns to listen', () async {
@@ -772,6 +799,175 @@ void main() {
       final state = await voiceSettled();
       expect(state.voiceState, VoiceState.disabled);
       expect(recognizer.permissionRequests, 0);
+    });
+  });
+
+  group('one activity at a time', () {
+    late DinoChatController notifier;
+
+    Future<void> playABit() async {
+      await notifier.startActivity(DinoCare.play);
+      for (var combo = 1; combo <= 3; combo++) {
+        await notifier.ballHit(combo);
+      }
+      expect(container.read(dinoChatProvider).scene, PetScene.play);
+    }
+
+    /// Nothing of the ball game is left: no arena, no punch pose.
+    void expectNoBall(DinoChatState state) {
+      expect(state.ballGame, isFalse);
+      expect(state.animation, isNot(CompanionAnimation.playing));
+    }
+
+    setUp(() async {
+      await ready();
+      notifier = container.read(dinoChatProvider.notifier);
+    });
+
+    test(
+      '1. Brincar -> sair -> Comer: the ball stops, the food room',
+      () async {
+        await playABit();
+        final stopsBefore = speech.stops;
+        await notifier.startActivity(DinoCare.feed);
+        final state = container.read(dinoChatProvider);
+        expectNoBall(state);
+        expect(state.scene, PetScene.food);
+        expect(state.offered, DinoCare.feed);
+        expect(speech.stops, greaterThan(stopsBefore), reason: 'voice cut');
+      },
+    );
+
+    test('2. Brincar -> sair -> Beber água: same room as eating', () async {
+      await playABit();
+      await notifier.startActivity(DinoCare.water);
+      final state = container.read(dinoChatProvider);
+      expectNoBall(state);
+      expect(state.scene, PetScene.food);
+      expect(state.scene.background, PetScene.food.background);
+      expect(state.offered, DinoCare.water);
+    });
+
+    test('3. Brincar -> sair -> Dormir: the bedroom, no ball', () async {
+      await playABit();
+      await notifier.startActivity(DinoCare.sleep);
+      final state = container.read(dinoChatProvider);
+      expectNoBall(state);
+      expect(state.scene, PetScene.sleep);
+      expect(state.bedroom, isTrue);
+    });
+
+    test('4. Brincar -> sair -> conversar: home, no play move', () async {
+      await playABit();
+      expect(notifier.back(), isTrue);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await notifier.send('Vamos brincar?');
+      final state = container.read(dinoChatProvider);
+      expectNoBall(state);
+      expect(state.scene, PetScene.home);
+    });
+
+    test('a hit still being answered when the game ends is dropped', () async {
+      await notifier.startActivity(DinoCare.play);
+      final late = notifier.ballHit(1); // the first hit: the "play" care
+      await notifier.startActivity(DinoCare.feed);
+      await late;
+      final state = container.read(dinoChatProvider);
+      expectNoBall(state);
+      expect(state.scene, PetScene.food);
+      expect(state.offered, DinoCare.feed);
+    });
+
+    test('quick switches never leave two activities on', () async {
+      await notifier.startActivity(DinoCare.play);
+      await notifier.startActivity(DinoCare.feed);
+      await notifier.startActivity(DinoCare.play);
+      await notifier.startActivity(DinoCare.sleep);
+      final state = container.read(dinoChatProvider);
+      expect(state.scene, PetScene.sleep);
+      expect(state.ballGame, isFalse);
+      expect(state.offered, isNull);
+      expect(state.bedroom, isTrue);
+    });
+
+    test('5. Dormir -> levantar -> Brincar', () async {
+      await notifier.care(DinoCare.sleep);
+      expect(container.read(dinoChatProvider).scene, PetScene.sleep);
+      await notifier.wakeUp();
+      expect(container.read(dinoChatProvider).wakingUp, isTrue);
+      // Playing while getting up: the new activity wins, cleanly.
+      await notifier.startActivity(DinoCare.play);
+      var state = container.read(dinoChatProvider);
+      expect(state.wakingUp, isFalse);
+      expect(state.scene, PetScene.play);
+      await Future<void>.delayed(
+        DinoChatController.wakeUpDuration + const Duration(milliseconds: 100),
+      );
+      // The old wake-up timer didn't drag it back home.
+      state = container.read(dinoChatProvider);
+      expect(state.scene, PetScene.play);
+      expect(state.ballGame, isTrue);
+    });
+
+    test('6. Comer -> Beber água -> conversar', () async {
+      await notifier.startActivity(DinoCare.feed);
+      await notifier.startActivity(DinoCare.water);
+      var state = container.read(dinoChatProvider);
+      expect(state.scene, PetScene.food);
+      expect(state.offered, DinoCare.water);
+      await notifier.send('Oi');
+      state = container.read(dinoChatProvider);
+      expect(state.lastResponse, isNotNull);
+      expect(state.animation, isNot(CompanionAnimation.playing));
+    });
+
+    test('10/11. "O que você quer?" is answered, not translated; '
+        '"O que é eat?" is', () async {
+      await notifier.send('O que você quer?');
+      final want = container.read(dinoChatProvider).lastResponse!;
+      expect(want.text, isNot(contains('significa')));
+      expect(want.portugueseText, isNull);
+      expect([for (final l in want.lines) ...?l.english], isNotEmpty);
+
+      await notifier.send('O que é eat?');
+      final meaning = container.read(dinoChatProvider).lastResponse!;
+      expect(meaning.text, contains('EAT'));
+      expect(meaning.text, contains('comer'));
+    });
+
+    test('the ball game can be played without voice (🔇)', () async {
+      await notifier.startActivity(DinoCare.play);
+      notifier.toggleQuietPlay();
+      final spokenBefore = speech.spoken.length;
+      for (var combo = 1; combo <= 10; combo++) {
+        await notifier.ballHit(combo);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(speech.spoken.length, spokenBefore);
+      expect(container.read(dinoChatProvider).xpEarned, greaterThan(0));
+    });
+
+    test('the ball game is quiet: no line for each hit', () async {
+      await notifier.startActivity(DinoCare.play);
+      int dinoLines() => container
+          .read(dinoChatProvider)
+          .messages
+          .where((m) => m.speaker == Speaker.dino)
+          .length;
+      final before = dinoLines();
+      for (var combo = 1; combo <= 9; combo++) {
+        await notifier.ballHit(combo);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      // Nine hits, one short line (the first hit, the "play" care).
+      expect(dinoLines() - before, 1);
+    });
+
+    test('15. minimized: the Dino stops talking', () async {
+      final stopsBefore = speech.stops;
+      await notifier.setForeground(false);
+      expect(speech.stops, greaterThan(stopsBefore));
+      await notifier.setForeground(true);
     });
   });
 }

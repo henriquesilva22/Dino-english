@@ -13,6 +13,8 @@ import '../core/companion/companion_engine.dart';
 import '../core/companion/companion_response.dart';
 import '../core/companion/companion_state.dart';
 import '../core/companion/food/food_item.dart';
+import '../core/companion/model/companion_model.dart';
+import '../core/companion/pet_scene.dart';
 import '../core/companion/learning/learning_word.dart';
 import '../core/companion/learning/learning_word_bank.dart';
 import '../core/companion/voice/speech_recognition_service.dart';
@@ -75,6 +77,9 @@ class DinoChatState {
     this.bedroom = false,
     this.walkingToBed = false,
     this.xpBurst = 0,
+    this.scene = PetScene.home,
+    this.quietPlay = false,
+    this.wakingUp = false,
   });
 
   /// The whole conversation (shown in the history sheet).
@@ -150,6 +155,15 @@ class DinoChatState {
   /// Changes each time XP is earned (the "+XP" burst animation).
   final int xpBurst;
 
+  /// Where the Dino is and what it does (one activity at a time).
+  final PetScene scene;
+
+  /// 🔇 in the ball game: play with no voice at all.
+  final bool quietPlay;
+
+  /// Getting up from the bed (the wake-up clip plays once).
+  final bool wakingUp;
+
   DinoChatState copyWith({
     List<DinoChatMessage>? messages,
     List<String>? suggestions,
@@ -179,6 +193,9 @@ class DinoChatState {
     bool? bedroom,
     bool? walkingToBed,
     int? xpBurst,
+    PetScene? scene,
+    bool? quietPlay,
+    bool? wakingUp,
   }) {
     return DinoChatState(
       messages: messages ?? this.messages,
@@ -209,6 +226,9 @@ class DinoChatState {
       bedroom: bedroom ?? this.bedroom,
       walkingToBed: walkingToBed ?? this.walkingToBed,
       xpBurst: xpBurst ?? this.xpBurst,
+      scene: scene ?? this.scene,
+      quietPlay: quietPlay ?? this.quietPlay,
+      wakingUp: wakingUp ?? this.wakingUp,
     );
   }
 }
@@ -266,6 +286,14 @@ class DinoChatController extends Notifier<DinoChatState> {
   late SpeechRecognitionService _recognizer;
   Timer? _tick;
   Timer? _settle;
+  Timer? _wake;
+
+  /// Bumped whenever the Dino changes activity: an answer, a chew or a
+  /// walk started before that belongs to the old activity and is
+  /// dropped when it finishes ([_isStale]).
+  int _epoch = 0;
+
+  bool _isStale(int epoch) => !ref.mounted || epoch != _epoch;
 
   StreamSubscription<SpeechEvent>? _speechEvents;
   ValueListenable<Object?>? _speaking;
@@ -316,6 +344,7 @@ class DinoChatController extends Notifier<DinoChatState> {
     ref.onDispose(() {
       _tick?.cancel();
       _settle?.cancel();
+      _wake?.cancel();
       _resume?.cancel();
       unawaited(_speechEvents?.cancel());
       _speaking?.removeListener(_onSpeaking);
@@ -354,7 +383,13 @@ class DinoChatController extends Notifier<DinoChatState> {
     await engine.load();
     if (!ref.mounted) return;
     _engine = engine;
-    state = state.copyWith(isReady: true, companion: engine.state);
+    state = state.copyWith(
+      isReady: true,
+      companion: engine.state,
+      // A Dino left sleeping is still in its bed.
+      scene: engine.state.isSleeping ? PetScene.sleep : PetScene.home,
+      bedroom: engine.state.isSleeping,
+    );
     _lastUrgent = engine.state.mostUrgentNeed;
     _tick = Timer.periodic(tickInterval, (_) => _onTick());
     await _restoreHistory();
@@ -413,6 +448,10 @@ class DinoChatController extends Notifier<DinoChatState> {
   Future<void> setForeground(bool foreground) async {
     if (_foreground == foreground) return;
     _foreground = foreground;
+    // Minimized or covered by another screen: the Dino stops talking.
+    if (!foreground) {
+      unawaited(ref.read(companionVoiceServiceProvider).stop());
+    }
     // Back from the system settings: maybe the mic is allowed now.
     if (foreground && !_voiceReady && state.voiceState == VoiceState.disabled) {
       if (!await _recognizer.isAvailable()) return;
@@ -589,9 +628,12 @@ class DinoChatController extends Notifier<DinoChatState> {
     );
     _updateHalfDuplex();
     _childSaid = (trimmed, viaVoice);
+    final epoch = _epoch;
     final response = await engine.process(trimmed);
     if (!ref.mounted) return;
-    await _apply(response);
+    // Another activity started meanwhile: the answer still belongs to the
+    // conversation, but it must not drive the new activity's pose.
+    await _apply(response, keepAnimation: epoch != _epoch);
   }
 
   // ---- English words in the Dino's sentences ---------------------------------
@@ -631,10 +673,11 @@ class DinoChatController extends Notifier<DinoChatState> {
   ) async {
     final engine = _engine;
     if (engine == null || state.isThinking) return;
+    final epoch = _epoch;
     state = state.copyWith(isThinking: true);
     _updateHalfDuplex();
     final response = await step(engine);
-    if (!ref.mounted) return;
+    if (_isStale(epoch)) return;
     if (response == null) {
       state = state.copyWith(isThinking: false);
       _updateHalfDuplex();
@@ -646,22 +689,110 @@ class DinoChatController extends Notifier<DinoChatState> {
   Future<void> care(DinoCare care) async {
     final engine = _engine;
     if (engine == null || state.isThinking) return;
+    final epoch = _epoch;
     state = state.copyWith(isThinking: true);
     _updateHalfDuplex();
     final response = await engine.care(care);
-    if (!ref.mounted) return;
+    if (_isStale(epoch)) return;
     await _apply(response);
   }
 
+  /// How long the Dino takes to get out of bed (its wake-up clip).
+  static final Duration wakeUpDuration = Duration(
+    milliseconds:
+        ((CompanionModel.dino.clip(CompanionAnim.wakeUp)?.seconds ?? 1.5) *
+                1000)
+            .round(),
+  );
+
+  /// "Acordar": the Dino gets up from the bed once (wake-up clip), then
+  /// leaves the bedroom.
   Future<void> wakeUp() async {
     final engine = _engine;
-    if (engine == null || state.isThinking) return;
+    if (engine == null || state.isThinking || state.wakingUp) return;
+    final epoch = _epoch;
     state = state.copyWith(isThinking: true);
     _updateHalfDuplex();
     final response = await engine.wakeUp();
-    if (!ref.mounted) return;
-    state = state.copyWith(bedroom: false);
-    await _apply(response);
+    if (_isStale(epoch)) return;
+    _settle?.cancel();
+    state = state.copyWith(
+      wakingUp: true,
+      animation: CompanionAnimation.wakingUp,
+    );
+    await _apply(response, keepAnimation: true);
+    _wake?.cancel();
+    _wake = Timer(wakeUpDuration, () {
+      if (_isStale(epoch)) return;
+      state = state.copyWith(wakingUp: false);
+      _enterScene(PetScene.home, stopVoice: false);
+    });
+  }
+
+  // ---- one activity at a time ----------------------------------------------------
+
+  /// Leaves what the Dino was doing and enters [next]: the ball stops
+  /// and goes away, food on screen is put back, the bedroom closes,
+  /// pending answers/chews/walks of the old activity are dropped and
+  /// (unless [stopVoice] is false) the Dino stops talking. The pose goes
+  /// back to rest, so nothing of the old activity keeps playing.
+  void _enterScene(PetScene next, {bool stopVoice = true}) {
+    final leaving = state.scene;
+    _epoch++;
+    _settle?.cancel();
+    _wake?.cancel();
+    _chewing = false;
+    if (leaving == PetScene.play && next != PetScene.play) _endBallQuietly();
+    if (stopVoice && leaving != next) {
+      unawaited(ref.read(companionVoiceServiceProvider).stop());
+    }
+    final companion = state.companion;
+    state = state.copyWith(
+      scene: next,
+      ballGame: next == PetScene.play,
+      bedroom: next == PetScene.sleep && state.bedroom,
+      clearOffered: next != PetScene.food,
+      walkingToBed: false,
+      wakingUp: false,
+      isThinking: false,
+      suggestions: leaving == next ? null : const [],
+      animation: companion == null
+          ? CompanionAnimation.idle
+          : CompanionEngine.idleAnimationFor(companion),
+    );
+    _updateHalfDuplex();
+  }
+
+  /// Left the ball game for another activity: the time played still
+  /// counts (XP), but no "Good game!" speech over the new activity.
+  void _endBallQuietly() {
+    final engine = _engine;
+    final played = _ballPlayed;
+    if (engine == null || played == null) return;
+    _ballPlayed = null;
+    final hits = _ballHits;
+    final best = _ballBest;
+    unawaited(() async {
+      final over = await engine.ballGameOver(
+        hits: hits,
+        bestCombo: best,
+        played: played.elapsed,
+      );
+      if (!ref.mounted || over.xpReward <= 0) return;
+      state = state.copyWith(
+        xpEarned: state.xpEarned + over.xpReward,
+        xpBurst: state.xpBurst + 1,
+      );
+    }());
+  }
+
+  /// 🔇 / 🔊 in the ball game.
+  void toggleQuietPlay() {
+    final quiet = !state.quietPlay;
+    state = state.copyWith(quietPlay: quiet);
+    if (quiet && state.scene == PetScene.play) {
+      unawaited(ref.read(companionVoiceServiceProvider).stop());
+    }
   }
 
   void consumeActivity() => state = state.copyWith(clearPendingActivity: true);
@@ -669,10 +800,11 @@ class DinoChatController extends Notifier<DinoChatState> {
   // ---- back -------------------------------------------------------------------------
 
   /// The system back / ✕ inside the companion screen: closes what is open
-  /// on it first (the ball game, the bedroom, food or water waiting to be
-  /// given), one step at a time. Returns false when nothing was open --
-  /// then the screen itself may close.
+  /// on it first (the ball game, the bedroom, the food room), one step at
+  /// a time. Returns false when nothing was open -- then the screen
+  /// itself may close.
   bool back() {
+    if (!hasOpenActivity) return false;
     if (state.ballGame) {
       unawaited(
         stopBallGame(
@@ -683,24 +815,19 @@ class DinoChatController extends Notifier<DinoChatState> {
       );
       return true;
     }
-    final asleep = state.companion?.isSleeping ?? false;
-    if (state.bedroom && !state.walkingToBed && !asleep) {
-      state = state.copyWith(bedroom: false);
-      return true;
-    }
-    if (state.offered != null) {
-      state = state.copyWith(clearOffered: true);
-      return true;
-    }
-    return false;
+    _enterScene(PetScene.home);
+    return true;
   }
 
-  /// Whether [back] would close something on the screen.
+  /// Whether [back] would close something on the screen (a sleeping Dino
+  /// stays in its bed; walking to it can't be undone).
   bool get hasOpenActivity {
     final asleep = state.companion?.isSleeping ?? false;
-    return state.ballGame ||
-        (state.bedroom && !state.walkingToBed && !asleep) ||
-        state.offered != null;
+    return switch (state.scene) {
+      PetScene.home => false,
+      PetScene.play || PetScene.food => true,
+      PetScene.sleep => !asleep && !state.walkingToBed && !state.wakingUp,
+    };
   }
 
   // Ball game tallies (for leaving it with the back button).
@@ -708,11 +835,14 @@ class DinoChatController extends Notifier<DinoChatState> {
   int _ballBest = 0;
   Stopwatch? _ballPlayed;
 
+  /// "Bola parada" is said at most once per game.
+  bool _ballStopSaid = false;
+
   // ---- pet activities -------------------------------------------------------------
 
   /// A care button. Food and water first appear on screen (the child
-  /// drags them to the Dino); "Brincar" invites to kick the ball;
-  /// "Dormir" puts it to bed right away.
+  /// drags them to the Dino); "Brincar" opens the ball game; "Dormir"
+  /// opens the bedroom. Each one closes the previous activity first.
   Future<void> startActivity(DinoCare care) async {
     final engine = _engine;
     if (engine == null || state.isThinking) return;
@@ -721,35 +851,36 @@ class DinoChatController extends Notifier<DinoChatState> {
       state = state.copyWith(clearOffered: true);
       return this.care(care);
     }
-    // "Dormir": the bedroom appears; the child taps the bed (goToBed).
-    if (care == DinoCare.sleep) {
-      state = state.copyWith(
-        clearOffered: true,
-        ballGame: false,
-        bedroom: true,
-        lookToken: state.lookToken + 1,
-      );
-      return _apply(await engine.bedtimeInvite());
+    switch (care) {
+      case DinoCare.sleep:
+        // "Dormir": the bedroom appears; the child taps the bed (goToBed).
+        _enterScene(PetScene.sleep);
+        state = state.copyWith(bedroom: true, lookToken: state.lookToken + 1);
+        final epoch = _epoch;
+        final invite = await engine.bedtimeInvite();
+        if (_isStale(epoch)) return;
+        return _apply(invite);
+      case DinoCare.play:
+        if (state.scene == PetScene.play) return;
+        _enterScene(PetScene.play);
+        engine.startBallGame();
+        _ballHits = 0;
+        _ballBest = 0;
+        _ballStopSaid = false;
+        _ballPlayed = Stopwatch()..start();
+        state = state.copyWith(lookToken: state.lookToken + 1);
+        final epoch = _epoch;
+        final invite = await engine.playInvite();
+        if (_isStale(epoch)) return;
+        return _apply(invite);
+      case DinoCare.feed || DinoCare.water:
+        _enterScene(PetScene.food);
+        state = state.copyWith(offered: care, lookToken: state.lookToken + 1);
+        final epoch = _epoch;
+        final offer = await engine.offer(care);
+        if (_isStale(epoch)) return;
+        return _apply(offer);
     }
-    state = state.copyWith(
-      bedroom: false,
-      offered: care == DinoCare.play ? null : care,
-      clearOffered: care == DinoCare.play,
-      lookToken: state.lookToken + 1,
-      // "Brincar": the bouncing-ball game.
-      ballGame: care == DinoCare.play ? true : null,
-    );
-    if (care == DinoCare.play) {
-      engine.startBallGame();
-      _ballHits = 0;
-      _ballBest = 0;
-      _ballPlayed = Stopwatch()..start();
-    }
-    await _apply(
-      care == DinoCare.play
-          ? await engine.playInvite()
-          : await engine.offer(care),
-    );
   }
 
   /// How long the Dino walks to its bed before lying down.
@@ -762,35 +893,44 @@ class DinoChatController extends Notifier<DinoChatState> {
     if (engine == null || !state.bedroom || state.walkingToBed) return;
     if (state.companion?.isSleeping ?? false) return;
     _settle?.cancel();
+    final epoch = _epoch;
     state = state.copyWith(
       walkingToBed: true,
       animation: CompanionAnimation.walking,
     );
     await Future<void>.delayed(walkToBedDuration);
-    if (!ref.mounted) return;
+    if (_isStale(epoch)) return;
     state = state.copyWith(walkingToBed: false);
     await care(DinoCare.sleep);
   }
 
   // ---- ball game ------------------------------------------------------------------
 
-  /// A hit in the ball game. Most hits are silent (XP only); combos cheer.
+  /// A hit in the ball game: the game is about moving, not talking --
+  /// most hits are silent (XP only); only big combos cheer.
   Future<void> ballHit(int combo) async {
     final engine = _engine;
     if (engine == null || !state.ballGame) return;
+    final epoch = _epoch;
     _ballHits++;
     if (combo > _ballBest) _ballBest = combo;
     final response = await engine.ballHit(combo);
-    if (!ref.mounted || !state.ballGame) return;
-    // Don't cut the Dino off for a silent hit.
-    if (response.shouldSpeak || response.xpReward > 0) await _apply(response);
+    if (_isStale(epoch) || !state.ballGame) return;
+    if (response.shouldSpeak || response.xpReward > 0) {
+      await _apply(response, speak: !state.dinoSpeaking);
+    }
   }
 
-  /// The ball stopped rolling.
+  /// The ball stopped rolling: one nudge per game at most.
   Future<void> ballStopped(int lostCombo) async {
     final engine = _engine;
     if (engine == null || !state.ballGame || state.dinoSpeaking) return;
-    await _apply(await engine.ballStopped(lostCombo));
+    if (_ballStopSaid) return;
+    _ballStopSaid = true;
+    final epoch = _epoch;
+    final response = await engine.ballStopped(lostCombo);
+    if (_isStale(epoch) || !state.ballGame) return;
+    await _apply(response);
   }
 
   /// "Parar": the game ends with a short summary (+ time bonus).
@@ -801,14 +941,17 @@ class DinoChatController extends Notifier<DinoChatState> {
   }) async {
     final engine = _engine;
     if (engine == null || !state.ballGame) return;
-    state = state.copyWith(ballGame: false);
-    await _apply(
-      await engine.ballGameOver(
-        hits: hits,
-        bestCombo: bestCombo,
-        played: played,
-      ),
+    // The summary below replaces the quiet ending.
+    _ballPlayed = null;
+    _enterScene(PetScene.home);
+    final epoch = _epoch;
+    final response = await engine.ballGameOver(
+      hits: hits,
+      bestCombo: bestCombo,
+      played: played,
     );
+    if (_isStale(epoch)) return;
+    await _apply(response);
   }
 
   /// The food/drink reached the Dino: it chews (or gulps), then the state
@@ -818,6 +961,7 @@ class DinoChatController extends Notifier<DinoChatState> {
     if (_engine == null || care == null || _chewing) return;
     final food = care == DinoCare.feed ? state.offeredFood : null;
     final hinted = state.foodHint;
+    final epoch = _epoch;
     state = state.copyWith(
       clearOffered: true,
       foodHint: false,
@@ -830,8 +974,8 @@ class DinoChatController extends Notifier<DinoChatState> {
     _chewing = true;
     _updateHalfDuplex();
     await Future<void>.delayed(chewDuration);
+    if (_isStale(epoch)) return;
     _chewing = false;
-    if (!ref.mounted) return;
     if (food == null) return this.care(care);
 
     // A food from the panel: its own hunger/happiness/XP, then the Dino
@@ -840,7 +984,7 @@ class DinoChatController extends Notifier<DinoChatState> {
     if (engine == null) return;
     state = state.copyWith(isThinking: true);
     final response = await engine.care(care, food: food);
-    if (!ref.mounted) return;
+    if (_isStale(epoch)) return;
     final loved = response.care == DinoCare.feed;
     await _apply(
       loved ? response.copyWith(animation: CompanionAnimation.happy) : response,
@@ -864,37 +1008,47 @@ class DinoChatController extends Notifier<DinoChatState> {
       state = state.copyWith(clearOffered: true);
       return care(DinoCare.feed);
     }
+    if (state.scene != PetScene.food) _enterScene(PetScene.food);
+    final epoch = _epoch;
     var hintSeen = true;
     try {
       hintSeen = await ref.read(foodRepositoryProvider).hintSeen();
     } catch (_) {}
-    if (!ref.mounted) return;
+    if (_isStale(epoch)) return;
     state = state.copyWith(
       offered: DinoCare.feed,
       offeredFood: food,
       foodHint: !hintSeen,
       lookToken: state.lookToken + 1,
     );
-    await _apply(await engine.offerFood(food));
+    final offer = await engine.offerFood(food);
+    if (_isStale(epoch)) return;
+    await _apply(offer);
   }
 
   /// The ball was tapped or picked up: the Dino looks at it.
   Future<void> noticeBall({required bool dragging}) async {
     final engine = _engine;
     if (engine == null || state.isThinking || state.dinoSpeaking) return;
+    final epoch = _epoch;
     state = state.copyWith(lookToken: state.lookToken + 1);
-    await _apply(await engine.ballNoticed(dragging: dragging));
+    final response = await engine.ballNoticed(dragging: dragging);
+    if (_isStale(epoch)) return;
+    await _apply(response);
   }
 
-  /// The ball was thrown: the Dino runs and kicks (goal every 3 kicks).
+  /// The toy ball was thrown at the Dino at home: it punches it (goal
+  /// every 3 kicks). The one play move allowed outside the ball game,
+  /// because the child asked for it.
   Future<void> kickBall() async {
     final engine = _engine;
     if (engine == null || state.isThinking) return;
+    final epoch = _epoch;
     state = state.copyWith(isThinking: true);
     _updateHalfDuplex();
     final response = await engine.kick();
-    if (!ref.mounted) return;
-    await _apply(response);
+    if (_isStale(epoch)) return;
+    await _apply(response, playMove: true);
   }
 
   Future<void> _onTick() async {
@@ -902,11 +1056,11 @@ class DinoChatController extends Notifier<DinoChatState> {
     if (engine == null || state.isThinking) return;
     final companion = await engine.tick();
     if (!ref.mounted) return;
+    final busyPose =
+        (_settle?.isActive ?? false) || state.wakingUp || state.walkingToBed;
     state = state.copyWith(
       companion: companion,
-      animation: _settle?.isActive ?? false
-          ? null
-          : CompanionEngine.idleAnimationFor(companion),
+      animation: busyPose ? null : CompanionEngine.idleAnimationFor(companion),
     );
     // A need just became urgent: the Dino says so by itself, once.
     final urgent = companion.mostUrgentNeed;
@@ -975,7 +1129,35 @@ class DinoChatController extends Notifier<DinoChatState> {
     }
   }
 
-  Future<void> _apply(CompanionResponse response) async {
+  /// Shows (and voices) one reply. [speak]: false keeps it silent;
+  /// [playMove]: the reply may make the Dino punch (only the ball game and
+  /// the toy ball do -- a "vamos brincar" said at home just cheers);
+  /// [keepAnimation]: the pose was already set (getting up).
+  Future<void> _apply(
+    CompanionResponse response, {
+    bool speak = true,
+    bool playMove = false,
+    bool keepAnimation = false,
+  }) async {
+    // Portuguese with one English word (lessons and translations as is).
+    response = _engine?.present(response) ?? response;
+    // The reply moved the Dino to another activity by itself ("vamos
+    // dormir", "come uma maçã"): go to that room, keep this reply.
+    final asleep = response.state.isSleeping;
+    if (asleep && state.scene != PetScene.sleep) {
+      _enterScene(PetScene.sleep, stopVoice: false);
+      state = state.copyWith(bedroom: true);
+    } else if ((response.care == DinoCare.feed ||
+            response.care == DinoCare.water) &&
+        state.scene == PetScene.home) {
+      _enterScene(PetScene.food, stopVoice: false);
+    }
+    var animation = response.animation;
+    if (animation == CompanionAnimation.playing &&
+        !playMove &&
+        state.scene != PetScene.play) {
+      animation = CompanionAnimation.happy;
+    }
     unawaited(_save(response));
     if (response.coinReward > 0) unawaited(_addCoins(response.coinReward));
     state = state.copyWith(
@@ -990,7 +1172,7 @@ class DinoChatController extends Notifier<DinoChatState> {
           ),
       ],
       suggestions: response.suggestions,
-      animation: response.animation,
+      animation: keepAnimation ? null : animation,
       companion: response.state,
       lastResponse: response,
       pendingActivity: response.activity,
@@ -1000,8 +1182,9 @@ class DinoChatController extends Notifier<DinoChatState> {
     );
 
     _settle?.cancel();
+    final epoch = _epoch;
     _settle = Timer(reactionDuration, () {
-      if (!ref.mounted) return;
+      if (_isStale(epoch) || state.wakingUp || state.walkingToBed) return;
       final companion = state.companion;
       if (companion == null) return;
       state = state.copyWith(
@@ -1014,8 +1197,10 @@ class DinoChatController extends Notifier<DinoChatState> {
       engine.noteSaid(response);
       _recognizer.languageHint = engine.expectedLanguage;
     }
-    // Speaking starts right away, so the mic stays muted through it.
-    if (response.shouldSpeak) {
+    // Speaking starts right away, so the mic stays muted through it. The
+    // ball game can be played in silence (🔇).
+    final muted = state.scene == PetScene.play && state.quietPlay;
+    if (response.shouldSpeak && speak && !muted) {
       unawaited(ref.read(companionVoiceServiceProvider).say(response));
     }
     _updateHalfDuplex();

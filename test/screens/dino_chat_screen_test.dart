@@ -233,7 +233,26 @@ void main() {
     }
     await settle();
 
-    // Brincar -> the ball game.
+    // At home: the kitchen behind the Dino.
+    expect(find.byKey(const ValueKey('room-home')), findsOneWidget);
+
+    // Brincar -> the ball game, on the field.
+    await tester.tap(find.text('Brincar'));
+    await settle();
+    expect(find.byKey(const ValueKey('ball-arena')), findsOneWidget);
+    expect(find.byKey(const ValueKey('room-play')), findsOneWidget);
+
+    // Água while playing: the ball is gone at once, the living room.
+    await tester.tap(find.text('Água'));
+    await settle();
+    expect(find.byKey(const ValueKey('ball-arena')), findsNothing);
+    expect(find.byKey(const ValueKey('room-food')), findsOneWidget);
+    // Back: home again.
+    await tester.binding.handlePopRoute();
+    await settle();
+    expect(find.byKey(const ValueKey('room-home')), findsOneWidget);
+    expect(find.byType(DinoChatScreen), findsOneWidget);
+
     await tester.tap(find.text('Brincar'));
     await settle();
     expect(find.byKey(const ValueKey('ball-arena')), findsOneWidget);

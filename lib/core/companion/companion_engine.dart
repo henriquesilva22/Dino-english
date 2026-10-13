@@ -20,6 +20,7 @@ import 'engine/response_selector.dart';
 import 'engine/text_normalizer.dart';
 import 'engine/vocabulary_detector.dart';
 import 'food/food_item.dart';
+import 'learning/bilingual_presenter.dart';
 import 'learning/learning_word.dart';
 import 'learning/learning_word_bank.dart';
 import 'learning/word_lesson_controller.dart';
@@ -109,6 +110,7 @@ class CompanionEngine {
         random: _random,
         clock: _clock,
       );
+      _presenter = BilingualPresenter(learningWords);
     }
   }
 
@@ -132,6 +134,16 @@ class CompanionEngine {
   /// Teaching by context ("Eu vou WALK amanhã."); null without a
   /// learning bank (then the Dino talks as before).
   WordLessonController? _lessons;
+  BilingualPresenter? _presenter;
+
+  /// A reply as the child sees and hears it: Portuguese with one English
+  /// word (with a lesson bank; otherwise unchanged). Idempotent.
+  CompanionResponse present(CompanionResponse response) {
+    // A quiz question stays as asked: swapping a word could give the
+    // answer away.
+    if (_brain.context.pending is QuizQuestion) return response;
+    return _presenter?.present(response) ?? response;
+  }
 
   CompanionState? _state;
   int _totalXp;
@@ -189,6 +201,12 @@ class CompanionEngine {
     await _ensureLoaded();
     _refresh();
     final text = _normalizer.normalize(input);
+    if (_lessons != null && _askWant.hasMatch(text.folded)) {
+      final response = _wantReply();
+      _recordTurns(input, response);
+      noteSaid(response);
+      return response;
+    }
     if (_lessons case final lessons?) {
       final reply = await lessons.handle(
         text,
@@ -274,9 +292,13 @@ class CompanionEngine {
       shouldListenAgain:
           intent != CompanionIntent.goodbye && response.activity == null,
     );
-    final withWord = _hybridAllowedAfter(intent)
-        ? await _withHybrid(reply, context: topic)
-        : reply;
+    final shown = present(reply);
+    // One English word per reply: a reply that already has one gets no
+    // extra sentence.
+    final hasWord = shown.lines.any((l) => l.english?.isNotEmpty ?? false);
+    final withWord = _hybridAllowedAfter(intent) && !hasWord
+        ? await _withHybrid(shown, context: topic)
+        : shown;
     noteSaid(withWord);
     return withWord;
   }
@@ -407,6 +429,45 @@ class CompanionEngine {
       isWaitingForAnswer: reply.awaitingRepetition,
       // Mixed lines carry their own languages.
       voice: VoiceMode.english,
+    );
+  }
+
+  /// "O que você quer?" -- not a word question: the Dino says what it
+  /// wants, in Portuguese with the English word ("Eu quero EAT!").
+  static final RegExp _askWant = RegExp(
+    r'^(?:e )?(?:o )?que (?:voce|vc|tu) (?:quer|queria|ta querendo|'
+    r'esta querendo|gostaria)(?: agora| fazer| hoje)?$|'
+    r'^what do you want(?: to do| now)?$',
+  );
+
+  CompanionResponse _wantReply() {
+    _refresh();
+    final lessons = _lessons!;
+    final (key, english) = state.isSleeping
+        ? ('want_sleep', 'sleep')
+        : switch (state.mostUrgentNeed) {
+            DinoNeed.hunger => ('want_food', 'eat'),
+            DinoNeed.thirst => ('want_drink', 'drink'),
+            DinoNeed.energy => ('want_sleep', 'sleep'),
+            _ =>
+              state.happiness < 70
+                  ? ('want_play', 'play')
+                  : _pick(const [('want_play', 'play'), ('want_fine', 'play')]),
+          };
+    final line =
+        lessons.bank.phrase(key, _random, word: lessons.wordFor(english)) ??
+        CompanionLine.mixed(
+          'Eu quero ${english.toUpperCase()}!',
+          english: [english.toUpperCase()],
+        );
+    return CompanionResponse(
+      lines: [line],
+      emotion: _emotion(0),
+      animation: state.isSleeping
+          ? CompanionAnimation.sleeping
+          : CompanionAnimation.happy,
+      state: state,
+      intent: CompanionIntent.askWhatAreYouDoing,
     );
   }
 
@@ -541,6 +602,10 @@ class CompanionEngine {
   static const int ballHitXp = 1;
   static const int ballComboStep = 5;
   static const int ballComboXp = 5;
+
+  /// The game is about moving, not talking: the Dino cheers only every
+  /// [ballCheerStep] hits in a row (the combo XP stays silent).
+  static const int ballCheerStep = 10;
   static const int maxBallXpPerSession = 40;
 
   /// 🪙 every 10 hits in a row, at most [dailyBallCoinCap] a day: the
@@ -564,14 +629,19 @@ class CompanionEngine {
     await _ensureLoaded();
     if (!_ballPlayedThisGame) {
       _ballPlayedThisGame = true;
-      return care(DinoCare.play);
+      // The real "play" care, without a word lesson in the middle of
+      // the game: one short line.
+      final played = await care(DinoCare.play, teach: false);
+      return played.copyWith(lines: played.lines.take(1).toList());
     }
     _refresh();
     var xp = _ballXp < maxBallXpPerSession ? ballHitXp : 0;
     final lines = <CompanionLine>[];
     var coins = 0;
-    if (combo % ballComboStep == 0) {
-      if (_ballXp + xp < maxBallXpPerSession) xp += ballComboXp;
+    if (combo % ballComboStep == 0 && _ballXp + xp < maxBallXpPerSession) {
+      xp += ballComboXp;
+    }
+    if (combo % ballCheerStep == 0) {
       lines.add(
         _pick(const [
           CompanionLine('Great!', 'Muito bem!'),
@@ -594,7 +664,7 @@ class CompanionEngine {
     return CompanionResponse(
       lines: lines,
       emotion: _emotion(granted),
-      animation: combo % ballComboStep == 0
+      animation: combo % ballCheerStep == 0
           ? CompanionAnimation.celebrating
           : CompanionAnimation.happy,
       state: state,
@@ -683,6 +753,7 @@ class CompanionEngine {
     DinoCare care, {
     CompanionEntity? about,
     FoodItem? food,
+    bool teach = true,
   }) async {
     await _ensureLoaded();
     _refresh();
@@ -709,7 +780,7 @@ class CompanionEngine {
     context.clearPending();
     var suggestions = const <String>[];
     VocabularyEntry? word;
-    if (outcome.applied) {
+    if (outcome.applied && teach) {
       word = food != null
           ? _vocabulary.byEnglish(food.englishName.toLowerCase())
           : null;
